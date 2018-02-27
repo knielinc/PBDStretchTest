@@ -5,6 +5,8 @@ import numpy
 import sys
 import math
 import pygame
+import numpy.linalg
+import scipy.linalg
 
 WINDOW_HEIGHT = 800
 WINDOW_WIDTH = 800
@@ -53,7 +55,7 @@ def get_center_of_mass(list_of_points):
     x_pos = x_pos / total_mass
     y_pos = y_pos / total_mass
 
-    return x_pos, y_pos
+    return numpy.matrix([x_pos, y_pos]).T
 
 
 # init
@@ -80,16 +82,20 @@ def compute_goal_pos(x0, x1):
 
     xcm0 = get_center_of_mass(x0)
     for curr_point in q:
-        curr_point = numpy.matrix(curr_point[0] - xcm0[0], curr_point[1] - xcm0[1])
+        x_val = curr_point.item(0) - xcm0.item(0)
+        y_val = curr_point.item(1) - xcm0.item(1)
+        curr_point = numpy.matrix([x_val,y_val]).T
 
     # pi = x1- xcm1
     p = []
-    for curr_point in p:
+    for curr_point in x1:
         p.append(curr_point.to_vec())
 
     xcm1 = get_center_of_mass(x1)
     for curr_point in p:
-        curr_point = numpy.matrix(curr_point[0] - xcm1[0], curr_point[1] - xcm1[1])
+        x_val = curr_point.item(0) - xcm1.item(0)
+        y_val = curr_point.item(1) - xcm1.item(1)
+        curr_point = numpy.matrix([x_val, y_val]).T
 
     # solve Sum of mi*(A*qi-pi)^2 for a so that Eq minimal
     # 1
@@ -99,14 +105,21 @@ def compute_goal_pos(x0, x1):
     for i in range(0, len(q)):
         mat_apq = mat_apq + (m[i] * p[i] * q[i].T)
 
+
+
     # Aqq symmetric -> no rotational part -> find rotational part of Apq
     # polar decomposition: Apq = R*S -> R = Apq* S^-1
     # R = Apq * sqrt(Apq^t*Apq)^-1
+    mat_r = mat_apq * scipy.linalg.inv(scipy.linalg.sqrtm(mat_apq.T * mat_apq))
     # gi = R*qi + xcm
+    g = []
+    for i in range(0,len(q)):
+        g.append(mat_r*q[i] + xcm1)
+    print(g)
 
 
 def simulation_step(dt):
-    print(get_center_of_mass(current_cluster_configuration))
+    compute_goal_pos(fixed_cluster_configuration,current_cluster_configuration)
 
 
 x_pos = 0
