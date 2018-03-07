@@ -24,22 +24,26 @@ lastFrameTime = 0
 
 class Point:
     def __init__(self, x_val, y_val, mass):
-        self.x_val = x_val
-        self.y_val = y_val
+        self.last_x_pos = x_val
+        self.last_y_pos = y_val
+        self.x_pos = x_val
+        self.y_pos = y_val
         self.mass = mass
+        self.x_vel = 0
+        self.y_vel = 0
 
     def minus(self, other):
-        new_x_val = self.x_val - other.x_val
-        new_y_val = self.y_val - other.y_val
+        new_x_val = self.x_pos - other.x_val
+        new_y_val = self.y_pos - other.y_val
         return Point(new_x_val, new_y_val, self.mass)
 
     def to_vec(self):
-        return numpy.matrix([self.x_val, self.y_val]).T
+        return numpy.matrix([self.x_pos, self.y_pos]).T
 
 
-fixed_cluster_configuration = [Point(.5, 0, 10), Point(0, -.5, 10), Point(-.5, 0, 10), Point(0, .5, 10)]
+fixed_cluster_configuration = [Point(.5, 0, 1), Point(0, -.5, 1), Point(-.5, 0, 1), Point(0, .5, 1)]
 
-current_cluster_configuration = [Point(.75, 0, 10), Point(0, -.75, 10), Point(-.75, 0, 10), Point(0, .75, 10)]
+current_cluster_configuration = [Point(2, 0, 1), Point(0, -.75, 1), Point(-.75, 0, 1), Point(0, .75, 1)]
 
 
 def get_center_of_mass(list_of_points):
@@ -48,8 +52,8 @@ def get_center_of_mass(list_of_points):
     total_mass = 0
 
     for curr_point in list_of_points:
-        x_pos = x_pos + curr_point.x_val * curr_point.mass
-        y_pos = y_pos + curr_point.y_val * curr_point.mass
+        x_pos = x_pos + curr_point.x_pos * curr_point.mass
+        y_pos = y_pos + curr_point.y_pos * curr_point.mass
         total_mass = total_mass + curr_point.mass
 
     x_pos = x_pos / total_mass
@@ -64,32 +68,51 @@ def draw_loop():
     for curr_point in current_cluster_configuration:
         pygame.draw.circle(window,
                            (255, 255, 255),
-                           (math.floor((curr_point.x_val * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2),
-                            math.floor(WINDOW_HEIGHT - ((curr_point.y_val * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))),
+                           (math.floor((curr_point.x_pos * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2),
+                            math.floor(WINDOW_HEIGHT - ((curr_point.y_pos * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))),
                            10,
                            0)
         # print("x = " + str(math.floor((curr_point.x_val * WINDOW_WIDTH/2) + WINDOW_WIDTH / 2)) + " y = " + str(math.floor(WINDOW_HEIGHT - ((curr_point.y_val * WINDOW_HEIGHT/2) + WINDOW_HEIGHT / 2))))
         # pygame.draw.circle(window, (255, 255, 255), (100, 100), 50, 0)
 
 
-def compute_goal_pos(x0, x1):
-    # qi = x0 - xcm
-    q = []
+def semi_implicit_euler_step(dt):
+    for v in current_cluster_configuration:
+        v.x_vel = v.x_vel  # ext force in x
+        v.y_vel = v.y_vel - (dt * (9.81 / v.mass))  # gravity
+        v.x_pos = v.x_pos + dt * v.x_vel
+        v.y_pos = v.y_pos + dt * v.y_vel
+
+
+def get_pos_vec(list_p):
+    p = []
+    for curr_point in list_p:
+        p.append(curr_point.to_vec())
+    return p
+
+
+def get_mass_vec(list_p):
     m = []
-    for curr_point in x0:
-        q.append(curr_point.to_vec())
+    for curr_point in list_p:
         m.append(curr_point.mass)
+    return m
+
+
+def compute_goal_pos(x0, x1):
+    # TODO need to refactor to make it shorter and more readable
+    # qi = x0 - xcm
+    q = get_pos_vec(x0)
+    m = get_mass_vec(x0)
 
     xcm0 = get_center_of_mass(x0)
+
     for curr_point in q:
         x_val = curr_point.item(0) - xcm0.item(0)
         y_val = curr_point.item(1) - xcm0.item(1)
-        curr_point = numpy.matrix([x_val,y_val]).T
+        curr_point = numpy.matrix([x_val, y_val]).T
 
     # pi = x1- xcm1
-    p = []
-    for curr_point in x1:
-        p.append(curr_point.to_vec())
+    p = get_pos_vec(x1)
 
     xcm1 = get_center_of_mass(x1)
     for curr_point in p:
@@ -105,32 +128,101 @@ def compute_goal_pos(x0, x1):
     for i in range(0, len(q)):
         mat_apq = mat_apq + (m[i] * p[i] * q[i].T)
 
-
-
     # Aqq symmetric -> no rotational part -> find rotational part of Apq
     # polar decomposition: Apq = R*S -> R = Apq* S^-1
     # R = Apq * sqrt(Apq^t*Apq)^-1
     mat_r = mat_apq * scipy.linalg.inv(scipy.linalg.sqrtm(mat_apq.T * mat_apq))
     # gi = R*qi + xcm
     g = []
-    for i in range(0,len(q)):
-        g.append(mat_r*q[i] + xcm1)
-    print(g)
+    for i in range(0, len(q)):
+        g.append(mat_r * q[i] + xcm1)
+
+    return g
+
+
+def init_scene():
+    testvar = 1
+
+
+def project_shape_constraints(k, positions):
+    goal_pos_vec = compute_goal_pos(fixed_cluster_configuration, current_cluster_configuration)
+    curr_pos_vec = get_pos_vec(positions)
+    constraint_gradient = []
+    for iter in range(0, len(positions)):
+        constraint_gradient.append(goal_pos_vec[iter] - curr_pos_vec[iter])
+
+    i = 0
+    for curr_pos in positions:
+        # print(str(curr_pos.to_vec()) + "before shape" + str(i))
+        # print(curr_pos.x_pos)
+        # print((k))
+        curr_pos.x_pos = curr_pos.x_pos + (k * constraint_gradient[i].item(0))
+        # print(curr_pos.x_pos)
+        # print(constraint_gradient[i].item(0))
+        curr_pos.y_pos = curr_pos.y_pos + (k * constraint_gradient[i].item(1))
+        # print(str(curr_pos.to_vec()) + "after shape" + str(i))
+        i = i + 1
+
+
+def project_collision_constraints(k, positions):
+    # goal pos > 0 in y
+    curr_pos_vec = get_pos_vec(positions)
+    constraint_gradient = []
+    for k in range(0, len(positions)):
+
+        y_val = curr_pos_vec[k].item(1)
+        if y_val < 0:
+            constraint_gradient.append(numpy.matrix([0, -1 * (y_val)]).T)
+        else:
+            constraint_gradient.append(numpy.matrix([0, 0]).T)
+
+    i = 0
+    for curr_pos in positions:
+        print(str(curr_pos.to_vec()) + "before")
+        curr_pos.y_pos = curr_pos.y_pos + (k * constraint_gradient[i].item(1))
+        print(str(curr_pos.to_vec()) + "after")
+        print(str(curr_pos.y_vel) + " vel y")
+
+
+def project_constraints(k, positions):
+    project_shape_constraints(k, positions)
+    project_collision_constraints(k, positions)
+
+
+solverIterations = 10
+# in [0,1]
+stiffness = .0001
+# correct stiffness, so that it is linear to k (stiffness)
+corrected_stiffness = 1 - ((1 - stiffness) ** solverIterations)
+print(str(corrected_stiffness) + "lul")
 
 
 def simulation_step(dt):
-    compute_goal_pos(fixed_cluster_configuration,current_cluster_configuration)
+    # compute_goal_pos(fixed_cluster_configuration,current_cluster_configuration)
+    semi_implicit_euler_step(dt)
+    # generate collision constraints
+    for i in range(0, solverIterations):
+        project_constraints(corrected_stiffness, current_cluster_configuration)
+    for curr_point in current_cluster_configuration:
+        curr_point.x_vel = (curr_point.x_pos - curr_point.last_x_pos) / dt
+        curr_point.last_x_pos = curr_point.x_pos
+        curr_point.y_vel = min((curr_point.y_pos - curr_point.last_y_pos) / dt, 0)
+        curr_point.last_y_pos = curr_point.y_pos
+    # print(get_pos_vec(current_cluster_configuration))
 
 
-x_pos = 0
+currentTime = time.time()
+lastFrameTime = time.time()
 running = True
+init_scene()
+
 while running:
 
     sleepTime = 1. / FPS - (currentTime - lastFrameTime)
     if sleepTime > 0:
         time.sleep(sleepTime)
     currentTime = time.time()
-    dt = currentTime - lastFrameTime
+    dt = (currentTime - lastFrameTime)
     lastFrameTime = currentTime
 
     for event in pygame.event.get():
@@ -144,8 +236,6 @@ while running:
 
     draw_loop()
     # pygame.draw.circle(window, (255, 255, 255), (xpos, 100), 50, 0)
-
-    x_pos = x_pos + 1
 
     pygame.display.flip()
 
