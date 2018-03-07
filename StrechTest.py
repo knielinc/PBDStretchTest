@@ -41,9 +41,9 @@ class Point:
         return numpy.matrix([self.x_pos, self.y_pos]).T
 
 
-fixed_cluster_configuration = [Point(.5, 0, 1), Point(0, -.5, 1), Point(-.5, 0, 1), Point(0, .5, 1)]
+fixed_cluster_configuration = [Point(.5, 0, 1), Point(0, -.5, 1), Point(-.5, 0, 1), Point(0, .5, 1), Point(0, 0, 1)]
 
-current_cluster_configuration = [Point(2, 0, 1), Point(0, -.75, 1), Point(-.75, 0, 1), Point(0, .75, 1)]
+current_cluster_configuration = [Point(2, 0, 1), Point(.5, -.1, 1), Point(-.75, 0, 1), Point(0, .75, 1), Point(0, 0, 1)]
 
 
 def get_center_of_mass(list_of_points):
@@ -171,27 +171,26 @@ def project_collision_constraints(k, positions):
     for k in range(0, len(positions)):
 
         y_val = curr_pos_vec[k].item(1)
-        if y_val < 0:
-            constraint_gradient.append(numpy.matrix([0, -1 * (y_val)]).T)
+        if y_val < -1:
+            constraint_gradient.append(numpy.matrix([0, -1 * (y_val+1)]).T)
         else:
             constraint_gradient.append(numpy.matrix([0, 0]).T)
 
-    i = 0
-    for curr_pos in positions:
-        print(str(curr_pos.to_vec()) + "before")
-        curr_pos.y_pos = curr_pos.y_pos + (k * constraint_gradient[i].item(1))
-        print(str(curr_pos.to_vec()) + "after")
-        print(str(curr_pos.y_vel) + " vel y")
+    for i in range(0, len(positions)):
+        print(str(positions[i].to_vec()) + "before" + str(i))
+        positions[i].y_pos = positions[i].y_pos + (1 * constraint_gradient[i].item(1)) #assume k = 1
+        print(str(positions[i].to_vec()) + "after" + str(i))
+        print(str(positions[i].y_vel) + " vel y" + str(i))
 
 
 def project_constraints(k, positions):
-    project_shape_constraints(k, positions)
     project_collision_constraints(k, positions)
+    project_shape_constraints(k, positions)
 
 
 solverIterations = 10
 # in [0,1]
-stiffness = .0001
+stiffness = .002
 # correct stiffness, so that it is linear to k (stiffness)
 corrected_stiffness = 1 - ((1 - stiffness) ** solverIterations)
 print(str(corrected_stiffness) + "lul")
