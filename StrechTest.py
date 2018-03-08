@@ -17,7 +17,7 @@ window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 
 pygame.display.set_caption("Strech Test")
 
-FPS = 60
+FPS = 30
 currentTime = 0
 lastFrameTime = 0
 
@@ -131,6 +131,9 @@ def compute_goal_pos(x0, x1):
     # Aqq symmetric -> no rotational part -> find rotational part of Apq
     # polar decomposition: Apq = R*S -> R = Apq* S^-1
     # R = Apq * sqrt(Apq^t*Apq)^-1
+    if numpy.linalg.matrix_rank(mat_apq.T * mat_apq != (mat_apq.T * mat_apq).shape):
+        print(mat_apq)
+        print(mat_apq.T * mat_apq)
     mat_r = mat_apq * scipy.linalg.inv(scipy.linalg.sqrtm(mat_apq.T * mat_apq))
     # gi = R*qi + xcm
     g = []
@@ -171,16 +174,17 @@ def project_collision_constraints(k, positions):
     for k in range(0, len(positions)):
 
         y_val = curr_pos_vec[k].item(1)
-        if y_val < -1:
-            constraint_gradient.append(numpy.matrix([0, -1 * (y_val+1)]).T)
+        # print(curr_pos_vec[k])
+        if y_val < 1:
+            constraint_gradient.append(numpy.matrix([0, -1 * (y_val + 1)]).T)
         else:
             constraint_gradient.append(numpy.matrix([0, 0]).T)
 
     for i in range(0, len(positions)):
-        print(str(positions[i].to_vec()) + "before" + str(i))
-        positions[i].y_pos = positions[i].y_pos + (1 * constraint_gradient[i].item(1)) #assume k = 1
-        print(str(positions[i].to_vec()) + "after" + str(i))
-        print(str(positions[i].y_vel) + " vel y" + str(i))
+        # print(str(positions[i].to_vec()) + "before" + str(i))
+        positions[i].y_pos = positions[i].y_pos + (.999 * constraint_gradient[i].item(1)) #assume k = 1
+        # print(str(positions[i].to_vec()) + "after" + str(i))
+        # print(str(positions[i].y_vel) + " vel y" + str(i))
 
 
 def project_constraints(k, positions):
@@ -190,10 +194,10 @@ def project_constraints(k, positions):
 
 solverIterations = 10
 # in [0,1]
-stiffness = .002
+stiffness = .001
 # correct stiffness, so that it is linear to k (stiffness)
 corrected_stiffness = 1 - ((1 - stiffness) ** solverIterations)
-print(str(corrected_stiffness) + "lul")
+# print(str(corrected_stiffness) + "lul")
 
 
 def simulation_step(dt):
@@ -205,7 +209,7 @@ def simulation_step(dt):
     for curr_point in current_cluster_configuration:
         curr_point.x_vel = (curr_point.x_pos - curr_point.last_x_pos) / dt
         curr_point.last_x_pos = curr_point.x_pos
-        curr_point.y_vel = min((curr_point.y_pos - curr_point.last_y_pos) / dt, 0)
+        curr_point.y_vel = min((curr_point.y_pos - curr_point.last_y_pos) / dt, 0) # hack
         curr_point.last_y_pos = curr_point.y_pos
     # print(get_pos_vec(current_cluster_configuration))
 
@@ -221,7 +225,7 @@ while running:
     if sleepTime > 0:
         time.sleep(sleepTime)
     currentTime = time.time()
-    dt = (currentTime - lastFrameTime)
+    dt = (currentTime - lastFrameTime)/1000
     lastFrameTime = currentTime
 
     for event in pygame.event.get():
