@@ -17,7 +17,7 @@ window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 
 pygame.display.set_caption("Strech Test")
 
-FPS = 30
+FPS = 60
 currentTime = 0
 lastFrameTime = 0
 
@@ -175,14 +175,14 @@ def project_collision_constraints(k, positions):
 
         y_val = curr_pos_vec[k].item(1)
         # print(curr_pos_vec[k])
-        if y_val < 1:
+        if y_val < -1:
             constraint_gradient.append(numpy.matrix([0, -1 * (y_val + 1)]).T)
         else:
             constraint_gradient.append(numpy.matrix([0, 0]).T)
 
     for i in range(0, len(positions)):
         # print(str(positions[i].to_vec()) + "before" + str(i))
-        positions[i].y_pos = positions[i].y_pos + (.999 * constraint_gradient[i].item(1)) #assume k = 1
+        positions[i].y_pos = positions[i].y_pos + (1 * constraint_gradient[i].item(1)) #assume k = 1
         # print(str(positions[i].to_vec()) + "after" + str(i))
         # print(str(positions[i].y_vel) + " vel y" + str(i))
 
@@ -194,7 +194,7 @@ def project_constraints(k, positions):
 
 solverIterations = 10
 # in [0,1]
-stiffness = .001
+stiffness = .002
 # correct stiffness, so that it is linear to k (stiffness)
 corrected_stiffness = 1 - ((1 - stiffness) ** solverIterations)
 # print(str(corrected_stiffness) + "lul")
@@ -225,7 +225,7 @@ while running:
     if sleepTime > 0:
         time.sleep(sleepTime)
     currentTime = time.time()
-    dt = (currentTime - lastFrameTime)/1000
+    dt = (currentTime - lastFrameTime)
     lastFrameTime = currentTime
 
     for event in pygame.event.get():
