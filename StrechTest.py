@@ -11,7 +11,9 @@ import scipy.linalg
 WINDOW_HEIGHT = 800
 WINDOW_WIDTH = 800
 
+
 pygame.init()
+pygame.font.init()
 
 window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 
@@ -43,7 +45,7 @@ class Point:
 
 fixed_cluster_configuration = [Point(.5, 0, 1), Point(0, -.5, 1), Point(-.5, 0, 1), Point(0, .5, 1), Point(0, 0, 1)]
 
-current_cluster_configuration = [Point(2, 0, 1), Point(.5, -.1, 1), Point(-.75, 0, 1), Point(0, .75, 1), Point(0, 0, 1)]
+current_cluster_configuration = [Point(1, 0, 1), Point(.5, -.1, 1), Point(-.75, 0, 1), Point(0, .75, 1), Point(0, 0, 1)]
 
 
 def get_center_of_mass(list_of_points):
@@ -64,7 +66,7 @@ def get_center_of_mass(list_of_points):
 
 # init
 
-def draw_loop():
+def draw_loop(dt):
     for curr_point in current_cluster_configuration:
         pygame.draw.circle(window,
                            (255, 255, 255),
@@ -74,6 +76,9 @@ def draw_loop():
                            0)
         # print("x = " + str(math.floor((curr_point.x_val * WINDOW_WIDTH/2) + WINDOW_WIDTH / 2)) + " y = " + str(math.floor(WINDOW_HEIGHT - ((curr_point.y_val * WINDOW_HEIGHT/2) + WINDOW_HEIGHT / 2))))
         # pygame.draw.circle(window, (255, 255, 255), (100, 100), 50, 0)
+        #label = my_font.render(str(1 / dt), False, (0, 0, 0))
+        #window.blit(label, (0, 0))
+        pygame.display.set_caption("Stretch Test | FPS: " + str(math.floor(1/dt)))
 
 
 def semi_implicit_euler_step(dt):
@@ -131,9 +136,10 @@ def compute_goal_pos(x0, x1):
     # Aqq symmetric -> no rotational part -> find rotational part of Apq
     # polar decomposition: Apq = R*S -> R = Apq* S^-1
     # R = Apq * sqrt(Apq^t*Apq)^-1
-    if numpy.linalg.matrix_rank(mat_apq.T * mat_apq != (mat_apq.T * mat_apq).shape):
-        print(mat_apq)
-        print(mat_apq.T * mat_apq)
+    #if numpy.linalg.matrix_rank(mat_apq.getH() * mat_apq != (mat_apq.getH() * mat_apq).shape):
+    #    print(p)
+    #    print(mat_apq)
+    #    print(mat_apq.T * mat_apq)
     mat_r = mat_apq * scipy.linalg.inv(scipy.linalg.sqrtm(mat_apq.getH() * mat_apq))
     # gi = R*qi + xcm
     g = []
@@ -188,13 +194,14 @@ def project_collision_constraints(k, positions):
 
 
 def project_constraints(k, positions):
-    project_collision_constraints(k, positions)
     project_shape_constraints(k, positions)
+
+    project_collision_constraints(k, positions)
 
 
 solverIterations = 10
 # in [0,1]
-stiffness = .002
+stiffness = .01
 # correct stiffness, so that it is linear to k (stiffness)
 corrected_stiffness = 1 - ((1 - stiffness) ** solverIterations)
 # print(str(corrected_stiffness) + "lul")
@@ -237,7 +244,7 @@ while running:
 
     window.fill((0, 0, 0))
 
-    draw_loop()
+    draw_loop(dt)
     # pygame.draw.circle(window, (255, 255, 255), (xpos, 100), 50, 0)
 
     pygame.display.flip()
