@@ -134,7 +134,7 @@ def compute_goal_pos(x0, x1):
     if numpy.linalg.matrix_rank(mat_apq.T * mat_apq != (mat_apq.T * mat_apq).shape):
         print(mat_apq)
         print(mat_apq.T * mat_apq)
-    mat_r = mat_apq * scipy.linalg.inv(scipy.linalg.sqrtm(mat_apq.T * mat_apq))
+    mat_r = mat_apq * scipy.linalg.inv(scipy.linalg.sqrtm(mat_apq.getH() * mat_apq))
     # gi = R*qi + xcm
     g = []
     for i in range(0, len(q)):
