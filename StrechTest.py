@@ -45,9 +45,23 @@ class Point:
         return numpy.matrix([self.x_pos, self.y_pos]).T
 
 
-fixed_cluster_configuration = [Point(.5, 0, 1), Point(0, -.5, 1), Point(-.5, 0, 1), Point(0, .5, 1), Point(0, 0, 1)]
+"""
+fixed_cluster_configuration_0 = [Point(.5, 0, 1), Point(0, -.5, 1), Point(-.75, 0, 1), Point(0, .5, 1), Point(0, 0, 1),
+                                 Point(.75, .75, 1), Point(-.5, .75, 1)]
 
-current_cluster_configuration = [Point(1, 0, 1), Point(.5, -.1, 1), Point(-.75, 0, 1), Point(0, .75, 1), Point(0, 0, 1)]
+current_cluster_configuration_0 = [Point(.5, 0, 1), Point(0, -.5, 1), Point(-.75, 0, 1), Point(0, .5, 1),
+                                   Point(0, 0, 1), Point(.75, .75, 1), Point(-.5, .75, 1)]
+
+clusters = [[0, 1, 2, 3, 4], [2, 3, 5, 6]]
+"""
+
+fixed_cluster_configuration_0 = [Point(-1, -.5, 1), Point(-1, .25, 1), Point(-.5, -.25, 1), Point(-.5, .25, 1),
+                                 Point(0, -.25, 1), Point(0, .25, 1), Point(.5, -.5, 1), Point(.5, .25, 1)]
+
+current_cluster_configuration_0 = [Point(-.5, -.25, 1), Point(-.5, .25, 1), Point(-.25, -.25, 1), Point(-.25, .25, 1),
+                                 Point(0, -.25, 1), Point(0, .25, 1), Point(.25, -.25, 1), Point(.25, .25, 1)]
+
+clusters = [[0, 1, 2, 3], [2, 3, 4, 5], [4, 5, 6, 7]]
 
 
 def get_center_of_mass(list_of_points):
@@ -69,7 +83,7 @@ def get_center_of_mass(list_of_points):
 # init
 
 def draw_loop(dt):
-    for curr_point in current_cluster_configuration:
+    for curr_point in current_cluster_configuration_0:
         pygame.draw.circle(window,
                            (255, 255, 255),
                            (math.floor((curr_point.x_pos * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2),
@@ -83,12 +97,11 @@ def draw_loop(dt):
 
 
 def semi_implicit_euler_step(dt):
-    for v in current_cluster_configuration:
+    for v in current_cluster_configuration_0:
         v.x_vel = v.x_vel  # ext force in x
         v.y_vel = v.y_vel - (dt * (gravity / v.mass))  # gravity
         v.x_pos = v.x_pos + dt * v.x_vel
         v.y_pos = v.y_pos + dt * v.y_vel
-
 
 
 def get_pos_vec(list_p):
@@ -113,19 +126,19 @@ def compute_goal_pos(x0, x1):
 
     xcm0 = get_center_of_mass(x0)
 
-    for curr_point in q:
-        x_val = curr_point.item(0) - xcm0.item(0)
-        y_val = curr_point.item(1) - xcm0.item(1)
-        curr_point = numpy.matrix([x_val, y_val]).T
+    for i in range(0, len(q)):
+        x_val = q[i].item(0) - xcm0.item(0)
+        y_val = q[i].item(1) - xcm0.item(1)
+        q[i] = numpy.matrix([x_val, y_val]).T
 
     # pi = x1- xcm1
     p = get_pos_vec(x1)
 
     xcm1 = get_center_of_mass(x1)
-    for curr_point in p:
-        x_val = curr_point.item(0) - xcm1.item(0)
-        y_val = curr_point.item(1) - xcm1.item(1)
-        curr_point = numpy.matrix([x_val, y_val]).T
+    for i in range(0, len(p)):
+        x_val = p[i].item(0) - xcm1.item(0)
+        y_val = p[i].item(1) - xcm1.item(1)
+        p[i] = numpy.matrix([x_val, y_val]).T
 
     # solve Sum of mi*(A*qi-pi)^2 for a so that Eq minimal
     # 1
@@ -166,31 +179,38 @@ def init_scene():
     testvar = 1
 
 
-def project_shape_constraints(k, positions):
-    goal_pos_vec = compute_goal_pos(fixed_cluster_configuration, current_cluster_configuration)
-    curr_pos_vec = get_pos_vec(positions)
+def project_shape_constraints(k, positions, cluster):
+    curr_positions = []
+    fixed_positions = []
+
+    for v in cluster:
+        curr_positions.append(current_cluster_configuration_0[v])
+        fixed_positions.append(fixed_cluster_configuration_0[v])
+
+    goal_pos_vec = compute_goal_pos(fixed_positions, curr_positions)
+    curr_pos_vec = get_pos_vec(curr_positions)
     constraint_gradient = []
-    for iter in range(0, len(positions)):
+    for iter in range(0, len(cluster)):
         constraint_gradient.append(goal_pos_vec[iter] - curr_pos_vec[iter])
 
     i = 0
-    #print("positions before shape constraint: " + str(get_pos_vec(positions)))
-    for curr_pos in positions:
+    # print("positions before shape constraint: " + str(get_pos_vec(positions)))
+    for v in cluster:
         # print(str(curr_pos.to_vec()) + "before shape" + str(i))
         # print(curr_pos.x_pos)
         # print((k))
-        curr_pos.x_pos = curr_pos.x_pos + (k * constraint_gradient[i].item(0))
+        positions[v].x_pos = positions[v].x_pos + (k * constraint_gradient[i].item(0))
         # print(curr_pos.x_pos)
         # print(constraint_gradient[i].item(0))
-        curr_pos.y_pos = curr_pos.y_pos + (k * constraint_gradient[i].item(1))
+        positions[v].y_pos = positions[v].y_pos + (k * constraint_gradient[i].item(1))
         # print(str(curr_pos.to_vec()) + "after shape" + str(i))
         i = i + 1
-    #print("positions after shape constraint: " + str(get_pos_vec(positions)))
-
+    # print("positions after shape constraint: " + str(get_pos_vec(positions)))
 
 
 def project_collision_constraints(k, positions):
     # goal pos > 0 in y
+
     curr_pos_vec = get_pos_vec(positions)
     constraint_gradient = []
     for k in range(0, len(positions)):
@@ -204,29 +224,31 @@ def project_collision_constraints(k, positions):
 
     for i in range(0, len(positions)):
         # print(str(positions[i].to_vec()) + "before" + str(i))
-        positions[i].y_pos = positions[i].y_pos + (.8 * constraint_gradient[i].item(1))  # assume k = 1, but make it a bit less, so that it won't get stuck in an irreversible position
+        positions[i].y_pos = positions[i].y_pos + (1 * constraint_gradient[i].item(
+            1))  # assume k = 1, but make it a bit less, so that it won't get stuck in an irreversible position
         # print(str(positions[i].to_vec()) + "after" + str(i))
         # print(str(positions[i].y_vel) + " vel y" + str(i))
 
 
-def project_velocity_constraints(k, positions, dt):
-    for v in positions:
-        v.x_vel = v.x_vel  # ext force in x
-        v.y_vel = k * (v.y_vel - (dt * (9.81 / v.mass)))  # gravity
-        v.x_pos = v.x_pos + dt * k * v.x_vel
-        v.y_pos = v.y_pos + dt * k * v.y_vel
+def project_velocity_constraints(k, positions, cluster, dt):
+    for v in cluster:
+        positions[v].x_vel = positions[v].x_vel  # ext force in x
+        positions[v].y_vel = k * (positions[v].y_vel - (dt * (9.81 / positions[v].mass)))  # gravity
+        positions[v].x_pos = positions[v].x_pos + dt * k * positions[v].x_vel
+        positions[v].y_pos = positions[v].y_pos + dt * k * positions[v].y_vel
 
 
-def project_constraints(k, positions, dt):
-    project_shape_constraints(k, positions)
+def project_constraints(k, positions, cluster_set, dt):
+    for cluster in cluster_set:
+        project_shape_constraints(k, positions, cluster)
 
-    project_collision_constraints(k, positions)
-    # project_velocity_constraints(k, positions, dt)
+        project_collision_constraints(k, positions)
+        # project_velocity_constraints(k, positions, cluster, dt)
 
 
 solverIterations = 10
 # in [0,1]
-stiffness = .001
+stiffness = .01
 # correct stiffness, so that it is linear to k (stiffness)
 corrected_stiffness = 1 - ((1 - stiffness) ** solverIterations)
 
@@ -239,11 +261,12 @@ def simulation_step(dt):
     semi_implicit_euler_step(dt)
     # generate collision constraints
     for i in range(0, solverIterations):
-        project_constraints(corrected_stiffness, current_cluster_configuration, dt)
-    for curr_point in current_cluster_configuration:
+        project_constraints(corrected_stiffness, current_cluster_configuration_0, clusters, dt)
+
+    for curr_point in current_cluster_configuration_0:
         curr_point.x_vel = (curr_point.x_pos - curr_point.last_x_pos) / dt
         curr_point.last_x_pos = curr_point.x_pos
-        curr_point.y_vel = (curr_point.y_pos - curr_point.last_y_pos) / dt # hack
+        curr_point.y_vel = (curr_point.y_pos - curr_point.last_y_pos) / dt  # hack
         curr_point.last_y_pos = curr_point.y_pos
     # print(get_pos_vec(current_cluster_configuration))
 
@@ -265,7 +288,7 @@ while running:
     clock.tick(FPS)
 
     currentTime = time.process_time()
-    dt = 1/FPS#(currentTime - lastFrameTime)
+    dt = 1 / FPS  # (currentTime - lastFrameTime)
     lastFrameTime = currentTime
 
     for event in pygame.event.get():
