@@ -8,6 +8,8 @@ import pygame
 import numpy.linalg
 import scipy.linalg
 
+# TODO shape -> points, parameter // FLEX wo particle /materialien, selber scene machen, verschiebung/dehnung von einfachem würfel sei flex oder 2d
+
 WINDOW_HEIGHT = 800
 WINDOW_WIDTH = 800
 
@@ -59,10 +61,67 @@ fixed_cluster_configuration_0 = [Point(-1, -.5, 1), Point(-1, .25, 1), Point(-.5
                                  Point(0, -.25, 1), Point(0, .25, 1), Point(.5, -.5, 1), Point(.5, .25, 1)]
 
 current_cluster_configuration_0 = [Point(-.5, -.25, 1), Point(-.5, .25, 1), Point(-.25, -.25, 1), Point(-.25, .25, 1),
-                                 Point(0, -.25, 1), Point(0, .25, 1), Point(.25, -.25, 1), Point(.25, .25, 1)]
+                                   Point(0, -.25, 1), Point(0, .25, 1), Point(.25, -.25, 1), Point(.25, .25, 1)]
 
 clusters = [[0, 1, 2, 3], [2, 3, 4, 5], [4, 5, 6, 7]]
 
+'''
+    startx, starty, endx, endy, density, connectiveness
+    
+    connectiveness: how many clusters in each axis are being built? connectiveness ^2 clusters in total
+'''
+
+
+def createClusterBox(startx, starty, endx, endy, weight, density, connectiveness):
+    startx_ = min(startx, endx)
+    endx_ = max(startx, endx)
+
+    starty_ = min(starty, endy)
+    endy_ = max(starty, endy)
+
+    curr_pos = [startx_, starty_]
+    fixed_cluster_configuration_0.clear()
+    current_cluster_configuration_0.clear()
+    #fixed_cluster_configuration_0.append(Point(curr_pos[0], curr_pos[1], weight))
+
+    nrInXDir = 0
+    nrInYDir = 0
+    i = 0
+    j = 0
+    while (starty_ + (j) * density) <= endy_:
+
+        while (startx_ + (i) * density) <= endx_:
+
+            curr_pos[0] = startx_ + i * density
+            fixed_cluster_configuration_0.append(Point(curr_pos[0], curr_pos[1], weight))
+            current_cluster_configuration_0.append(Point(curr_pos[0], curr_pos[1], weight))
+            i = i + 1
+
+        j = j + 1
+        curr_pos[1] = starty_ + j * density
+        curr_pos[0] = startx_
+        nrInXDir = i
+        i = 0
+    nrInYDir = j
+    currCluster = []
+
+    clusterSizeX = math.floor(nrInXDir / connectiveness) + 1
+    clusterSizeY = math.floor(nrInYDir / connectiveness) + 1
+
+    global clusters
+    clusters = []
+
+    for y in range(0, connectiveness):
+        for x in range(0, connectiveness):
+            for j_ in range(-1, clusterSizeY ):
+                for i_ in range(-1, clusterSizeX ):
+                    currIndex = (i_) + (j_ ) * nrInXDir + (x * clusterSizeX) + (y * clusterSizeY * nrInXDir)
+                    if not (((x == 0 and i_ == -1) or (y == 0 and j_ == -1)) or ((x == connectiveness - 1 and i_ == clusterSizeX - 1) or (y == connectiveness - 1 and j_ == clusterSizeY - 1))):
+                        if currIndex < (j_+1 + y * clusterSizeY) * nrInXDir:
+                            if currIndex < nrInYDir * nrInXDir:
+                                currCluster.append(currIndex)
+            clusters.append(currCluster)
+            currCluster = []
 
 def get_center_of_mass(list_of_points):
     x_pos = 0
@@ -176,7 +235,8 @@ def compute_goal_pos(x0, x1):
 
 
 def init_scene():
-    testvar = 1
+    createClusterBox(-.5, -1, .5, 1, .75, .1, 3)
+
 
 
 def project_shape_constraints(k, positions, cluster):
@@ -246,7 +306,7 @@ def project_constraints(k, positions, cluster_set, dt):
         # project_velocity_constraints(k, positions, cluster, dt)
 
 
-solverIterations = 10
+solverIterations = 5
 # in [0,1]
 stiffness = .01
 # correct stiffness, so that it is linear to k (stiffness)
@@ -281,7 +341,6 @@ running = True
 init_scene()
 
 while running:
-
     # sleepTime = 1. / FPS - (currentTime - lastFrameTime)
     # if sleepTime > 0:
     #    time.sleep(sleepTime)
