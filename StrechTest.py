@@ -10,7 +10,7 @@ import scipy.linalg
 
 # TODO shape -> points, parameter // FLEX wo particle /materialien, selber scene machen, verschiebung/dehnung von einfachem würfel sei flex oder 2d
 
-USE_XPBD = False
+USE_XPBD = True
 WINDOW_HEIGHT = 800
 WINDOW_WIDTH = 800
 
@@ -87,8 +87,10 @@ def precalculate_Qis():
         p0 = fixed_cluster_configuration_0[item[0]]
         p1 = fixed_cluster_configuration_0[item[1]]
         p2 = fixed_cluster_configuration_0[item[2]]
-        q_inverse = numpy.matrix([[p1.x_pos - p0.x_pos, p2.x_pos - p0.x_pos], [p1.y_pos - p0.y_pos, p2.y_pos - p0.y_pos]]).I
+        q_inverse = numpy.matrix(
+            [[p1.x_pos - p0.x_pos, p2.x_pos - p0.x_pos], [p1.y_pos - p0.y_pos, p2.y_pos - p0.y_pos]]).I
         precalculated_Qis.append(q_inverse)
+
 
 def get_Ps(cluster_index):
     item = clusters[cluster_index]
@@ -96,7 +98,8 @@ def get_Ps(cluster_index):
     p1 = current_cluster_configuration_0[item[1]]
     p2 = current_cluster_configuration_0[item[2]]
     p = numpy.matrix([[p1.x_pos - p0.x_pos, p2.x_pos - p0.x_pos], [p1.y_pos - p0.y_pos, p2.y_pos - p0.y_pos]])
-    precalculated_Qis.append(p)
+    return p
+
 
 '''
     startx, starty, endx, endy, density, connectiveness
@@ -276,21 +279,14 @@ def init_scene():
 def project_shape_constraints(k, positions, cluster, curr_cluster_index):
     curr_positions = []
     fixed_positions = []
-    inv_mass_matrix = numpy.zeros(shape=(len(cluster) * 2, len(cluster) * 2))
 
     for v in cluster:
         curr_positions.append(current_cluster_configuration_0[v])
         fixed_positions.append(fixed_cluster_configuration_0[v])
 
-    for i in range(len(curr_positions)):
-        inv_mass_matrix[i * 2, i * 2] = 1.0 / curr_positions[i].mass
-        inv_mass_matrix[i * 2 + 1, i * 2 + 1] = 1.0 / curr_positions[i].mass
-
-
     goal_pos_vec = compute_goal_pos(fixed_positions, curr_positions)
     curr_pos_vec = get_pos_vec(curr_positions)
     constraint_gradient = []
-
 
     for iter in range(len(cluster)):
         constraint_gradient.append(goal_pos_vec[iter] - curr_pos_vec[iter])
@@ -314,30 +310,62 @@ def project_shape_constraints(k, positions, cluster, curr_cluster_index):
             i = i + 1
     # print("positions after shape constraint: " + str(get_pos_vec(positions)))
 
-def project_shape_constraints_new(k, positions, cluster, curr_cluster_index):
 
-    constraint_vec = get_strain_vec(curr_cluster_index)
+def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt = 1/20000):
+    curr_positions = []
+    fixed_positions = []
+
+    for v in cluster:
+        curr_positions.append(current_cluster_configuration_0[v])
+        fixed_positions.append(fixed_cluster_configuration_0[v])
+
+    inv_mass_matrix = numpy.zeros(shape=(len(cluster) * 2, len(cluster) * 2))
+
+    for i in range(len(curr_positions)):
+        inv_mass_matrix[i * 2, i * 2] = 1.0 / curr_positions[i].mass
+        inv_mass_matrix[i * 2 + 1, i * 2 + 1] = 1.0 / curr_positions[i].mass
+
+    P = get_Ps(curr_cluster_index)
+    Qi = precalculated_Qis[curr_cluster_index]
+    F = P * Qi
+    G = F.T * F - numpy.identity(2)
+    constraint_vec = numpy.matrix([[G.item(0)], [G.item(3)], [G.item(1)]])
+
+
+    f1 = F[:, 0]
+    f2 = F[:, 1]
+
+    c1_T = Qi[:, 0].T
+    c2_T = Qi[:, 1].T
+
+    # ∇Sij =[∇p1 ,∇p2]Sij =fj ciT +fi cjT
+
+    delta_s_1_1_without_p0 = f1 * c1_T * 2
+    delta_s_2_2_without_p0 = f2 * c2_T * 2
+    delta_s_1_2_without_p0 = f2 * c1_T + f1 * c2_T
+
+    constraint_gradient_without_p0 = numpy.block(
+        [[delta_s_1_1_without_p0], [delta_s_2_2_without_p0], [delta_s_1_2_without_p0]])
+
+    p0_constraint_gradient = - constraint_gradient_without_p0[:, 0] - constraint_gradient_without_p0[:, 1]
+
+    constraint_gradient = numpy.block([p0_constraint_gradient, constraint_gradient_without_p0]).T
 
     alpha_tilde = compliance_matrix / (dt * dt)
 
-    #∇Sij =􏰈 [∇p1 ,∇p2] 􏰉Sij =fj ciT +fi cjT
-    
-    delta_lambda = (-1 * strain_vec - alpha_tilde * lagrange_multipliers[curr_cluster_index]) * (
-            constraint_gradient * inv_mass_matrix * constraint_gradient.T + alpha_tilde).I
+    delta_lambda_nominator = (-1 * constraint_vec - (alpha_tilde * lagrange_multipliers[curr_cluster_index]))
+    delta_lambda_demonimator = (constraint_gradient * inv_mass_matrix * constraint_gradient.T + alpha_tilde)
+
+    delta_lambda = delta_lambda_demonimator.I * delta_lambda_nominator #ORDER MATTERS!
 
     delta_x = (inv_mass_matrix * constraint_gradient.T * delta_lambda)
 
-    for v in cluster:
-        positions[v].x_pos = positions[v].x_pos + delta_x[i].item(0)
-        positions[v].y_pos = positions[v].y_pos + delta_x[i].item(1)
+    lagrange_multipliers[curr_cluster_index] = lagrange_multipliers[curr_cluster_index] + delta_lambda
+    i = 0
+    for v in range(3):
+        positions[v].x_pos = positions[v].x_pos + delta_x.item(0 + 2 * i)
+        positions[v].y_pos = positions[v].y_pos + delta_x.item(1 + 2 * i)
         i = i + 1
-
-def get_strain_vec(cluster_index):
-    P = get_Ps(cluster_index)
-    Qi = precalculated_Qis[cluster_index]
-    F = P * Qi
-    G = F.T * F - numpy.identity(2)
-    strain_vec = numpy.matrix([[G.item(0)],[G.item(3)],[G.item(1)]])
 
 
 def project_collision_constraints(k, positions):
@@ -356,7 +384,8 @@ def project_collision_constraints(k, positions):
 
     for i in range(0, len(positions)):
         # print(str(positions[i].to_vec()) + "before" + str(i))
-        positions[i].y_pos = positions[i].y_pos + (1 * constraint_gradient[i].item(1))  # assume k = 1, but make it a bit less, so that it won't get stuck in an irreversible position
+        positions[i].y_pos = positions[i].y_pos + (1 * constraint_gradient[i].item(
+            1))  # assume k = 1, but make it a bit less, so that it won't get stuck in an irreversible position
         # print(str(positions[i].to_vec()) + "after" + str(i))
         # print(str(positions[i].y_vel) + " vel y" + str(i))
 
@@ -371,7 +400,11 @@ def project_velocity_constraints(k, positions, cluster, dt):
 
 def project_constraints(k, positions, cluster_set, dt):
     for i in range(len(cluster_set)):
-        project_shape_constraints(k, positions, cluster_set[i], i)
+        if USE_XPBD:
+            project_shape_constraints_new(k, positions, cluster_set[i], i)
+
+        if not USE_XPBD:
+            project_shape_constraints(k, positions, cluster_set[i], i)
 
         project_collision_constraints(k, positions)
         # project_velocity_constraints(k, positions, cluster, dt)
@@ -388,9 +421,8 @@ corrected_stiffness = 1 - ((1 - stiffness) ** solverIterations)
 
 
 def init_lagrange_multiplier(nr_of_constraints):
-    lagrange_multipliers = []
     for i in range(nr_of_constraints):
-        lagrange_multipliers.append(numpy.array([0, 0, 0]))
+        lagrange_multipliers.append(numpy.matrix([[0], [0], [0]]))
 
 
 def simulation_step(dt):
