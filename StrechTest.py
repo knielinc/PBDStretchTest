@@ -23,7 +23,7 @@ window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.DOUBLEBUF
 
 pygame.display.set_caption("Strech Test")
 
-FPS = 60
+FPS = 120
 clock = pygame.time.Clock()
 currentTime = 0
 lastFrameTime = 0
@@ -71,6 +71,7 @@ current_cluster_configuration_0 = [Point(.5, 0, 1), Point(0, -.5, 1), Point(-.75
 clusters = [[0, 1, 2, 3, 4], [2, 3, 5, 6]]
 """
 
+'''
 fixed_cluster_configuration_0 = [Point(-1, -.5, 1), Point(-1, .25, 1), Point(-.5, -.25, 1), Point(-.5, .25, 1),
                                  Point(0, -.25, 1), Point(0, .25, 1), Point(.5, -.5, 1), Point(.5, .25, 1)]
 
@@ -78,6 +79,14 @@ current_cluster_configuration_0 = [Point(-.5, -.25, 1), Point(-.5, .25, 1), Poin
                                    Point(0, -.25, 1), Point(0, .25, 1), Point(.25, -.25, 1), Point(.25, .25, 1)]
 
 clusters = [[0, 1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6], [5, 6, 7]]  # triangles
+
+'''
+
+fixed_cluster_configuration_0 = [Point(-.5, -.5, 1), Point(0, .25, 1), Point(.5, -.5, 1)]
+
+current_cluster_configuration_0 = [Point(-.5, -.5, 1), Point(0, 22, 1), Point(.5, -.5, 1)]
+
+clusters = [[0, 1, 2]]  # triangles
 
 precalculated_Qis = []
 
@@ -311,7 +320,7 @@ def project_shape_constraints(k, positions, cluster, curr_cluster_index):
     # print("positions after shape constraint: " + str(get_pos_vec(positions)))
 
 
-def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt = 1/20000):
+def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt):
     curr_positions = []
     fixed_positions = []
 
@@ -319,7 +328,7 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt 
         curr_positions.append(current_cluster_configuration_0[v])
         fixed_positions.append(fixed_cluster_configuration_0[v])
 
-    inv_mass_matrix = numpy.zeros(shape=(len(cluster) * 2, len(cluster) * 2))
+    inv_mass_matrix = numpy.asmatrix(numpy.zeros(shape=(len(cluster) * 2, len(cluster) * 2)))
 
     for i in range(len(curr_positions)):
         inv_mass_matrix[i * 2, i * 2] = 1.0 / curr_positions[i].mass
@@ -330,7 +339,6 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt 
     F = P * Qi
     G = F.T * F - numpy.identity(2)
     constraint_vec = numpy.matrix([[G.item(0)], [G.item(3)], [G.item(1)]])
-
 
     f1 = F[:, 0]
     f2 = F[:, 1]
@@ -349,22 +357,28 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt 
 
     p0_constraint_gradient = - constraint_gradient_without_p0[:, 0] - constraint_gradient_without_p0[:, 1]
 
-    constraint_gradient = numpy.block([p0_constraint_gradient, constraint_gradient_without_p0]).T
+    constraint_gradient = numpy.block([p0_constraint_gradient, constraint_gradient_without_p0])
+
+
+    constraint_gradient_2 = numpy.block([[constraint_gradient[0:1, :], constraint_gradient[1:2, :]],
+                                       [constraint_gradient[2:3, :], constraint_gradient[3:4, :]],
+                                       [constraint_gradient[4:5, :], constraint_gradient[5:6, :]]])
+
 
     alpha_tilde = compliance_matrix / (dt * dt)
 
-    delta_lambda_nominator = (-1 * constraint_vec - (alpha_tilde * lagrange_multipliers[curr_cluster_index]))
-    delta_lambda_demonimator = (constraint_gradient * inv_mass_matrix * constraint_gradient.T + alpha_tilde)
+    delta_lambda_nominator = ((-1 * constraint_vec) - (alpha_tilde * lagrange_multipliers[curr_cluster_index]))
+    delta_lambda_denominator = (constraint_gradient_2 * inv_mass_matrix * constraint_gradient_2.T + alpha_tilde)
 
-    delta_lambda = delta_lambda_demonimator.I * delta_lambda_nominator #ORDER MATTERS!
+    delta_lambda = delta_lambda_denominator.I * delta_lambda_nominator  # ORDER MATTERS!
 
-    delta_x = (inv_mass_matrix * constraint_gradient.T * delta_lambda)
+    delta_x = (inv_mass_matrix * constraint_gradient_2.T * delta_lambda)
 
     lagrange_multipliers[curr_cluster_index] = lagrange_multipliers[curr_cluster_index] + delta_lambda
     i = 0
-    for v in range(3):
-        positions[v].x_pos = positions[v].x_pos + delta_x.item(0 + 2 * i)
-        positions[v].y_pos = positions[v].y_pos + delta_x.item(1 + 2 * i)
+    for v in cluster:
+        positions[v].x_pos = positions[v].x_pos + delta_x.item(0 + i)
+        positions[v].y_pos = positions[v].y_pos + delta_x.item(3 + i)
         i = i + 1
 
 
@@ -401,7 +415,7 @@ def project_velocity_constraints(k, positions, cluster, dt):
 def project_constraints(k, positions, cluster_set, dt):
     for i in range(len(cluster_set)):
         if USE_XPBD:
-            project_shape_constraints_new(k, positions, cluster_set[i], i)
+            project_shape_constraints_new(k, positions, cluster_set[i], i, dt)
 
         if not USE_XPBD:
             project_shape_constraints(k, positions, cluster_set[i], i)
