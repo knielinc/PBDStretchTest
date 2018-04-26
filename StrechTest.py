@@ -23,7 +23,7 @@ window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.DOUBLEBUF
 
 pygame.display.set_caption("Strech Test")
 
-FPS = 120
+FPS = 30
 clock = pygame.time.Clock()
 currentTime = 0
 lastFrameTime = 0
@@ -71,23 +71,22 @@ current_cluster_configuration_0 = [Point(.5, 0, 1), Point(0, -.5, 1), Point(-.75
 clusters = [[0, 1, 2, 3, 4], [2, 3, 5, 6]]
 """
 
-'''
+
 fixed_cluster_configuration_0 = [Point(-1, -.5, 1), Point(-1, .25, 1), Point(-.5, -.25, 1), Point(-.5, .25, 1),
                                  Point(0, -.25, 1), Point(0, .25, 1), Point(.5, -.5, 1), Point(.5, .25, 1)]
 
-current_cluster_configuration_0 = [Point(-.5, -.25, 1), Point(-.5, .25, 1), Point(-.25, -.25, 1), Point(-.25, .25, 1),
-                                   Point(0, -.25, 1), Point(0, .25, 1), Point(.25, -.25, 1), Point(.25, .25, 1)]
+current_cluster_configuration_0 = [Point(-1, -.5, 1), Point(-1, .25, 1), Point(-.5, -.25, 1), Point(-.5, .25, 1),
+                                 Point(0, -.25, 1), Point(0, .25, 1), Point(.5, -.5, 1), Point(.5, .25, 1)]
 
 clusters = [[0, 1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6], [5, 6, 7]]  # triangles
 
 '''
-
 fixed_cluster_configuration_0 = [Point(-.5, -.5, 1), Point(0, .25, 1), Point(.5, -.5, 1)]
 
 current_cluster_configuration_0 = [Point(-.5, -.5, 1), Point(0, 22, 1), Point(.5, -.5, 1)]
 
 clusters = [[0, 1, 2]]  # triangles
-
+'''
 precalculated_Qis = []
 
 
@@ -348,9 +347,9 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
 
     # ∇Sij =[∇p1 ,∇p2]Sij =fj ciT +fi cjT
 
-    delta_s_1_1_without_p0 = numpy.reshape(f1 * c1_T * 2, 4)
-    delta_s_2_2_without_p0 = numpy.reshape(f2 * c2_T * 2, 4)
-    delta_s_1_2_without_p0 = numpy.reshape(f2 * c1_T + f1 * c2_T, 4)
+    delta_s_1_1_without_p0 = numpy.reshape((f1 * c1_T * 2).T, 4)
+    delta_s_2_2_without_p0 = numpy.reshape((f2 * c2_T * 2).T, 4)
+    delta_s_1_2_without_p0 = numpy.reshape((f2 * c1_T + f1 * c2_T).T, 4)
 
     constraint_gradient_without_p0 = numpy.block(
         [[delta_s_1_1_without_p0], [delta_s_2_2_without_p0], [delta_s_1_2_without_p0]])
@@ -501,3 +500,4 @@ while running:
     pygame.display.flip()
 
 pygame.quit()
+  
