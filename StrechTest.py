@@ -348,37 +348,37 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
 
     # ∇Sij =[∇p1 ,∇p2]Sij =fj ciT +fi cjT
 
-    delta_s_1_1_without_p0 = f1 * c1_T * 2
-    delta_s_2_2_without_p0 = f2 * c2_T * 2
-    delta_s_1_2_without_p0 = f2 * c1_T + f1 * c2_T
+    delta_s_1_1_without_p0 = numpy.reshape(f1 * c1_T * 2, 4)
+    delta_s_2_2_without_p0 = numpy.reshape(f2 * c2_T * 2, 4)
+    delta_s_1_2_without_p0 = numpy.reshape(f2 * c1_T + f1 * c2_T, 4)
 
     constraint_gradient_without_p0 = numpy.block(
         [[delta_s_1_1_without_p0], [delta_s_2_2_without_p0], [delta_s_1_2_without_p0]])
 
-    p0_constraint_gradient = - constraint_gradient_without_p0[:, 0] - constraint_gradient_without_p0[:, 1]
+    p0_constraint_gradient = - constraint_gradient_without_p0[:, 0:2] - constraint_gradient_without_p0[:, 2:4]
 
     constraint_gradient = numpy.block([p0_constraint_gradient, constraint_gradient_without_p0])
 
-
+    '''
     constraint_gradient_2 = numpy.block([[constraint_gradient[0:1, :], constraint_gradient[1:2, :]],
                                        [constraint_gradient[2:3, :], constraint_gradient[3:4, :]],
                                        [constraint_gradient[4:5, :], constraint_gradient[5:6, :]]])
-
+    '''
 
     alpha_tilde = compliance_matrix / (dt * dt)
 
     delta_lambda_nominator = ((-1 * constraint_vec) - (alpha_tilde * lagrange_multipliers[curr_cluster_index]))
-    delta_lambda_denominator = (constraint_gradient_2 * inv_mass_matrix * constraint_gradient_2.T + alpha_tilde)
+    delta_lambda_denominator = (constraint_gradient * inv_mass_matrix * constraint_gradient.T + alpha_tilde)
 
     delta_lambda = delta_lambda_denominator.I * delta_lambda_nominator  # ORDER MATTERS!
 
-    delta_x = (inv_mass_matrix * constraint_gradient_2.T * delta_lambda)
+    delta_x = (inv_mass_matrix * constraint_gradient.T * delta_lambda)
 
     lagrange_multipliers[curr_cluster_index] = lagrange_multipliers[curr_cluster_index] + delta_lambda
     i = 0
     for v in cluster:
-        positions[v].x_pos = positions[v].x_pos + delta_x.item(0 + i)
-        positions[v].y_pos = positions[v].y_pos + delta_x.item(3 + i)
+        positions[v].x_pos = positions[v].x_pos + delta_x.item(0 +  2 * i)
+        positions[v].y_pos = positions[v].y_pos + delta_x.item(1 +  2 * i)
         i = i + 1
 
 
