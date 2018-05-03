@@ -87,14 +87,23 @@ clusters = triplets.simplices.tolist()
 
 
 def pointFromTuple(tuple):
-    if(tuple[0] == 0 or tuple[0] == 1):
+    if (tuple[0] == 0 or tuple[0] == 1):
         return Point(tuple[0], tuple[1], 0)
-    return Point(tuple[0], tuple[1], 1)
+    return Point(tuple[0], tuple[1], .1)
+
+
+def deformedPointFromTuple(tuple):
+    if (tuple[0] == 0):
+        return Point(tuple[0] - 0, tuple[1], 0)
+    if (tuple[0] == 1):
+        return Point(tuple[0] + 0, tuple[1], 0)
+
+    return Point(tuple[0], tuple[1], .1)
 
 
 fixed_cluster_configuration_0 = list(map(pointFromTuple, sequence_of_tuples.tolist()))
 
-current_cluster_configuration_0 = fixed_cluster_configuration_0
+current_cluster_configuration_0 = list(map(deformedPointFromTuple, sequence_of_tuples.tolist()))
 
 '''
 
@@ -164,8 +173,8 @@ def createClusterBox(startx, starty, endx, endy, weight, density, connectiveness
 
         while (startx_ + (i) * density) <= endx_:
             curr_pos[0] = startx_ + i * density
-            fixed_cluster_configuration_0.append(Point(curr_pos[0], curr_pos[1], 1/weight))
-            current_cluster_configuration_0.append(Point(curr_pos[0], curr_pos[1], 1/weight))
+            fixed_cluster_configuration_0.append(Point(curr_pos[0], curr_pos[1], 1 / weight))
+            current_cluster_configuration_0.append(Point(curr_pos[0], curr_pos[1], 1 / weight))
             i = i + 1
 
         j = j + 1
@@ -203,9 +212,9 @@ def get_center_of_mass(list_of_points):
     total_mass = 0
 
     for curr_point in list_of_points:
-        x_pos = x_pos + curr_point.x_pos * 1./curr_point.invmass
-        y_pos = y_pos + curr_point.y_pos * 1./curr_point.invmass
-        total_mass = total_mass + 1./curr_point.invmass
+        x_pos = x_pos + curr_point.x_pos * 1. / curr_point.invmass
+        y_pos = y_pos + curr_point.y_pos * 1. / curr_point.invmass
+        total_mass = total_mass + 1. / curr_point.invmass
 
     x_pos = x_pos / total_mass
     y_pos = y_pos / total_mass
@@ -216,19 +225,35 @@ def get_center_of_mass(list_of_points):
 # init
 
 def draw_loop(dt):
+
+    if USE_XPBD:
+        for curr_triangle in clusters:
+            pos1 = [math.floor(
+                current_cluster_configuration_0[curr_triangle[0]].x_pos * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2,
+                    math.floor(WINDOW_HEIGHT - ((current_cluster_configuration_0[
+                                                     curr_triangle[0]].y_pos * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))]
+            pos2 = [math.floor(
+                current_cluster_configuration_0[curr_triangle[1]].x_pos * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2,
+                    math.floor(WINDOW_HEIGHT - ((current_cluster_configuration_0[
+                                                     curr_triangle[1]].y_pos * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))]
+            pos3 = [math.floor(
+                current_cluster_configuration_0[curr_triangle[2]].x_pos * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2,
+                    math.floor(WINDOW_HEIGHT - ((current_cluster_configuration_0[
+                                                     curr_triangle[2]].y_pos * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))]
+
+            pygame.draw.lines(window, (255, 255, 255), True, [pos1, pos2, pos3], 2)
+
     for curr_point in current_cluster_configuration_0:
         pygame.draw.circle(window,
-                           (255, 255, 255),
+                           (255, 100, 255),
                            (math.floor((curr_point.x_pos * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2),
                             math.floor(WINDOW_HEIGHT - ((curr_point.y_pos * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))),
-                           10,
+                           5,
                            0)
         # print("x = " + str(math.floor((curr_point.x_val * WINDOW_WIDTH/2) + WINDOW_WIDTH / 2)) + " y = " + str(math.floor(WINDOW_HEIGHT - ((curr_point.y_val * WINDOW_HEIGHT/2) + WINDOW_HEIGHT / 2))))
         # pygame.draw.circle(window, (255, 255, 255), (100, 100), 50, 0)
         # label = my_font.render(str(1 / dt), False, (0, 0, 0))
         # window.blit(label, (0, 0))
-
-
 def semi_implicit_euler_step(dt):
     for v in current_cluster_configuration_0:
         v.x_vel = v.x_vel  # ext force in x
@@ -451,7 +476,7 @@ def project_constraints(k, positions, cluster_set, dt):
         # project_velocity_constraints(k, positions, cluster, dt)
 
 
-solverIterations = 5
+solverIterations = 3
 # in [0,1]
 stiffness = .01
 # correct stiffness, so that it is linear to k (stiffness)
