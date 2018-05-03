@@ -7,6 +7,7 @@ import math
 import pygame
 import numpy.linalg
 import scipy.linalg
+from scipy.spatial import Delaunay
 
 # TODO shape -> points, parameter // FLEX wo particle /materialien, selber scene machen, verschiebung/dehnung von einfachem würfel sei flex oder 2d
 
@@ -43,19 +44,19 @@ lagrange_multipliers = []
 
 
 class Point:
-    def __init__(self, x_val, y_val, mass):
+    def __init__(self, x_val, y_val, invmass):
         self.last_x_pos = x_val
         self.last_y_pos = y_val
         self.x_pos = x_val
         self.y_pos = y_val
-        self.mass = mass
+        self.invmass = invmass
         self.x_vel = 0
         self.y_vel = 0
 
     def minus(self, other):
         new_x_val = self.x_pos - other.x_val
         new_y_val = self.y_pos - other.y_val
-        return Point(new_x_val, new_y_val, self.mass)
+        return Point(new_x_val, new_y_val, self.invmass)
 
     def to_vec(self):
         return numpy.matrix([self.x_pos, self.y_pos]).T
@@ -71,14 +72,41 @@ current_cluster_configuration_0 = [Point(.5, 0, 1), Point(0, -.5, 1), Point(-.75
 clusters = [[0, 1, 2, 3, 4], [2, 3, 5, 6]]
 """
 
+h = 0.1
+meshgrid_array = numpy.linspace(0, 1, math.ceil(1 / h))
+[x_vals, y_vals] = numpy.meshgrid(meshgrid_array, meshgrid_array)
+x_vals_vec = numpy.reshape(x_vals.T, (100, 1))
+y_vals_vec = numpy.reshape(y_vals.T, (100, 1))
+
+sequence_of_tuples = numpy.block([x_vals_vec, y_vals_vec])
+sequence_of_tuples = numpy.asmatrix(sequence_of_tuples)
+
+triplets = Delaunay(sequence_of_tuples)
+
+clusters = triplets.simplices.tolist()
+
+
+def pointFromTuple(tuple):
+    if(tuple[0] == 0 or tuple[0] == 1):
+        return Point(tuple[0], tuple[1], 0)
+    return Point(tuple[0], tuple[1], 1)
+
+
+fixed_cluster_configuration_0 = list(map(pointFromTuple, sequence_of_tuples.tolist()))
+
+current_cluster_configuration_0 = fixed_cluster_configuration_0
+
+'''
 
 fixed_cluster_configuration_0 = [Point(-1, -.5, 1), Point(-1, .25, 1), Point(-.5, -.25, 1), Point(-.5, .25, 1),
                                  Point(0, -.25, 1), Point(0, .25, 1), Point(.5, -.5, 1), Point(.5, .25, 1)]
 
 current_cluster_configuration_0 = [Point(-1, -.5, 1), Point(-1, .25, 1), Point(-.5, -.25, 1), Point(-.5, .25, 1),
-                                 Point(0, -.25, 1), Point(0, .25, 1), Point(.5, -.5, 1), Point(.5, .25, 1)]
+                                   Point(0, -.25, 1), Point(0, .25, 1), Point(.5, -.5, 1), Point(.5, .25, 1)]
 
 clusters = [[0, 1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6], [5, 6, 7]]  # triangles
+
+'''
 
 '''
 fixed_cluster_configuration_0 = [Point(-.5, -.5, 1), Point(0, .25, 1), Point(.5, -.5, 1)]
@@ -136,8 +164,8 @@ def createClusterBox(startx, starty, endx, endy, weight, density, connectiveness
 
         while (startx_ + (i) * density) <= endx_:
             curr_pos[0] = startx_ + i * density
-            fixed_cluster_configuration_0.append(Point(curr_pos[0], curr_pos[1], weight))
-            current_cluster_configuration_0.append(Point(curr_pos[0], curr_pos[1], weight))
+            fixed_cluster_configuration_0.append(Point(curr_pos[0], curr_pos[1], 1/weight))
+            current_cluster_configuration_0.append(Point(curr_pos[0], curr_pos[1], 1/weight))
             i = i + 1
 
         j = j + 1
@@ -175,9 +203,9 @@ def get_center_of_mass(list_of_points):
     total_mass = 0
 
     for curr_point in list_of_points:
-        x_pos = x_pos + curr_point.x_pos * curr_point.mass
-        y_pos = y_pos + curr_point.y_pos * curr_point.mass
-        total_mass = total_mass + curr_point.mass
+        x_pos = x_pos + curr_point.x_pos * 1./curr_point.invmass
+        y_pos = y_pos + curr_point.y_pos * 1./curr_point.invmass
+        total_mass = total_mass + 1./curr_point.invmass
 
     x_pos = x_pos / total_mass
     y_pos = y_pos / total_mass
@@ -204,7 +232,7 @@ def draw_loop(dt):
 def semi_implicit_euler_step(dt):
     for v in current_cluster_configuration_0:
         v.x_vel = v.x_vel  # ext force in x
-        v.y_vel = v.y_vel - (dt * (gravity / v.mass))  # gravity
+        v.y_vel = v.y_vel - (dt * (gravity * v.invmass))  # gravity
         v.x_pos = v.x_pos + dt * v.x_vel
         v.y_pos = v.y_pos + dt * v.y_vel
 
@@ -219,7 +247,7 @@ def get_pos_vec(list_p):
 def get_mass_vec(list_p):
     m = []
     for curr_point in list_p:
-        m.append(curr_point.mass)
+        m.append(curr_point.invmass)
     return m
 
 
@@ -330,8 +358,8 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
     inv_mass_matrix = numpy.asmatrix(numpy.zeros(shape=(len(cluster) * 2, len(cluster) * 2)))
 
     for i in range(len(curr_positions)):
-        inv_mass_matrix[i * 2, i * 2] = 1.0 / curr_positions[i].mass
-        inv_mass_matrix[i * 2 + 1, i * 2 + 1] = 1.0 / curr_positions[i].mass
+        inv_mass_matrix[i * 2, i * 2] = curr_positions[i].invmass
+        inv_mass_matrix[i * 2 + 1, i * 2 + 1] = curr_positions[i].invmass
 
     P = get_Ps(curr_cluster_index)
     Qi = precalculated_Qis[curr_cluster_index]
@@ -376,8 +404,8 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
     lagrange_multipliers[curr_cluster_index] = lagrange_multipliers[curr_cluster_index] + delta_lambda
     i = 0
     for v in cluster:
-        positions[v].x_pos = positions[v].x_pos + delta_x.item(0 +  2 * i)
-        positions[v].y_pos = positions[v].y_pos + delta_x.item(1 +  2 * i)
+        positions[v].x_pos = positions[v].x_pos + delta_x.item(0 + 2 * i)
+        positions[v].y_pos = positions[v].y_pos + delta_x.item(1 + 2 * i)
         i = i + 1
 
 
@@ -406,7 +434,7 @@ def project_collision_constraints(k, positions):
 def project_velocity_constraints(k, positions, cluster, dt):
     for v in cluster:
         positions[v].x_vel = positions[v].x_vel  # ext force in x
-        positions[v].y_vel = k * (positions[v].y_vel - (dt * (9.81 / positions[v].mass)))  # gravity
+        positions[v].y_vel = k * (positions[v].y_vel - (dt * (9.81 * positions[v].invmass)))  # gravity
         positions[v].x_pos = positions[v].x_pos + dt * k * positions[v].x_vel
         positions[v].y_pos = positions[v].y_pos + dt * k * positions[v].y_vel
 
@@ -442,7 +470,7 @@ def simulation_step(dt):
     # compute_goal_pos(fixed_cluster_configuration,current_cluster_configuration)
     semi_implicit_euler_step(dt)
     # generate collision constraints
-    nr_of_constraints = len(current_cluster_configuration_0)
+    nr_of_constraints = len(clusters)
     init_lagrange_multiplier(nr_of_constraints)
 
     for i in range(0, solverIterations):
