@@ -7,6 +7,7 @@ import math
 import pygame
 import numpy.linalg
 import scipy.linalg
+import scipy.io
 from scipy.spatial import Delaunay
 
 # TODO shape -> points, parameter // FLEX wo particle /materialien, selber scene machen, verschiebung/dehnung von einfachem würfel sei flex oder 2d
@@ -22,9 +23,9 @@ pygame.font.init()
 
 window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.DOUBLEBUF, 32)
 
-pygame.display.set_caption("Strech Test")
+pygame.display.set_caption("XPBD")
 
-FPS = 30
+FPS = 100
 clock = pygame.time.Clock()
 currentTime = 0
 lastFrameTime = 0
@@ -32,8 +33,8 @@ lastFrameTime = 0
 # lamé parameters
 lame_youngs_modulus = 10 ** 5
 lame_poisson_ratio = 0.3  # apparently poisson ratio
-lame_mu = lame_youngs_modulus / (2 * (1 + lame_poisson_ratio))
-lame_lambda = lame_youngs_modulus * lame_poisson_ratio / ((1 + lame_poisson_ratio) * (1 - 2 * lame_poisson_ratio))  #
+lame_mu = 1 #lame_youngs_modulus / (2 * (1 + lame_poisson_ratio))
+lame_lambda = 0.5#lame_youngs_modulus * lame_poisson_ratio / ((1 + lame_poisson_ratio) * (1 - 2 * lame_poisson_ratio))  #
 
 stiffness_matrix = numpy.matrix([[lame_lambda + 2 * lame_mu, lame_lambda, 0],
                                  [lame_lambda, lame_lambda + 2 * lame_mu, 0],
@@ -81,24 +82,28 @@ y_vals_vec = numpy.reshape(y_vals.T, (100, 1))
 sequence_of_tuples = numpy.block([x_vals_vec, y_vals_vec])
 sequence_of_tuples = numpy.asmatrix(sequence_of_tuples)
 
-triplets = Delaunay(sequence_of_tuples)
+mat = scipy.io.loadmat('FEMTriangles.mat')
 
-clusters = triplets.simplices.tolist()
+#triplets = Delaunay(sequence_of_tuples)
+#clusters = triplets.simplices.tolist()
+
+triplets = mat.get('el') - 1 # because matlab indices are + 1
+clusters = triplets.tolist()
 
 
 def pointFromTuple(tuple):
     if (tuple[0] == 0 or tuple[0] == 1):
         return Point(tuple[0], tuple[1], 0)
-    return Point(tuple[0], tuple[1], .1)
+    return Point(tuple[0], tuple[1], 1.0/0.0006)
 
 
 def deformedPointFromTuple(tuple):
     if (tuple[0] == 0):
-        return Point(tuple[0] - 0, tuple[1], 0)
+        return Point(tuple[0] - 0.2, tuple[1], 0)
     if (tuple[0] == 1):
-        return Point(tuple[0] + 0, tuple[1], 0)
+        return Point(tuple[0] + 0.2, tuple[1], 0)
 
-    return Point(tuple[0], tuple[1], .1)
+    return Point(tuple[0], tuple[1], 1.0/0.000006)
 
 
 fixed_cluster_configuration_0 = list(map(pointFromTuple, sequence_of_tuples.tolist()))
@@ -256,10 +261,11 @@ def draw_loop(dt):
         # window.blit(label, (0, 0))
 def semi_implicit_euler_step(dt):
     for v in current_cluster_configuration_0:
-        v.x_vel = v.x_vel  # ext force in x
-        v.y_vel = v.y_vel - (dt * (gravity * v.invmass))  # gravity
-        v.x_pos = v.x_pos + dt * v.x_vel
-        v.y_pos = v.y_pos + dt * v.y_vel
+        if(v.invmass != 0):
+            v.x_vel = v.x_vel  # ext force in x
+            v.y_vel = v.y_vel - (dt * (gravity))  # gravity
+            v.x_pos = v.x_pos + dt * v.x_vel
+            v.y_pos = v.y_pos + dt * v.y_vel
 
 
 def get_pos_vec(list_p):
@@ -272,7 +278,7 @@ def get_pos_vec(list_p):
 def get_mass_vec(list_p):
     m = []
     for curr_point in list_p:
-        m.append(curr_point.invmass)
+        m.append(1./curr_point.invmass)
     return m
 
 
@@ -476,7 +482,7 @@ def project_constraints(k, positions, cluster_set, dt):
         # project_velocity_constraints(k, positions, cluster, dt)
 
 
-solverIterations = 3
+solverIterations = 5
 # in [0,1]
 stiffness = .01
 # correct stiffness, so that it is linear to k (stiffness)
@@ -499,7 +505,11 @@ def simulation_step(dt):
     init_lagrange_multiplier(nr_of_constraints)
 
     for i in range(0, solverIterations):
+        begin_time = time.process_time()
+
         project_constraints(corrected_stiffness, current_cluster_configuration_0, clusters, dt)
+
+        print("projected shape constraints in " + str(time.process_time() - begin_time) + " sec")
 
     for curr_point in current_cluster_configuration_0:
         curr_point.x_vel = (curr_point.x_pos - curr_point.last_x_pos) / dt
