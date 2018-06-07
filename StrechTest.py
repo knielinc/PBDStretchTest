@@ -25,16 +25,16 @@ window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.DOUBLEBUF
 
 pygame.display.set_caption("XPBD")
 
-FPS = 100
+FPS = 20
 clock = pygame.time.Clock()
 currentTime = 0
 lastFrameTime = 0
 
 # lamé parameters
-lame_youngs_modulus = 10 ** 5
-lame_poisson_ratio = 0.3  # apparently poisson ratio
-lame_mu = 1 #lame_youngs_modulus / (2 * (1 + lame_poisson_ratio))
-lame_lambda = 0.5#lame_youngs_modulus * lame_poisson_ratio / ((1 + lame_poisson_ratio) * (1 - 2 * lame_poisson_ratio))  #
+lame_youngs_modulus = 10 ** 6
+lame_poisson_ratio = 0  # apparently poisson ratio
+lame_mu = lame_youngs_modulus / (2 * (1 + lame_poisson_ratio))
+lame_lambda = lame_youngs_modulus * lame_poisson_ratio / ((1 + lame_poisson_ratio) * (1 - 2 * lame_poisson_ratio))  #
 
 stiffness_matrix = numpy.matrix([[lame_lambda + 2 * lame_mu, lame_lambda, 0],
                                  [lame_lambda, lame_lambda + 2 * lame_mu, 0],
@@ -94,7 +94,7 @@ clusters = triplets.tolist()
 def pointFromTuple(tuple):
     if (tuple[0] == 0 or tuple[0] == 1):
         return Point(tuple[0], tuple[1], 0)
-    return Point(tuple[0], tuple[1], 1.0/0.0006)
+    return Point(tuple[0], tuple[1], 1.0/0.0002)
 
 
 def deformedPointFromTuple(tuple):
@@ -103,24 +103,22 @@ def deformedPointFromTuple(tuple):
     if (tuple[0] == 1):
         return Point(tuple[0] + 0.2, tuple[1], 0)
 
-    return Point(tuple[0], tuple[1], 1.0/0.000006)
+    return Point(tuple[0], tuple[1], 1.0/0.0002)
 
 
 fixed_cluster_configuration_0 = list(map(pointFromTuple, sequence_of_tuples.tolist()))
 
 current_cluster_configuration_0 = list(map(deformedPointFromTuple, sequence_of_tuples.tolist()))
 
-'''
 
-fixed_cluster_configuration_0 = [Point(-1, -.5, 1), Point(-1, .25, 1), Point(-.5, -.25, 1), Point(-.5, .25, 1),
+fixed_cluster_configuration_0 = [Point(-1, -.5, 0), Point(-1, .25, 0), Point(-.5, -.25, 1), Point(-.5, .25, 1),
                                  Point(0, -.25, 1), Point(0, .25, 1), Point(.5, -.5, 1), Point(.5, .25, 1)]
 
-current_cluster_configuration_0 = [Point(-1, -.5, 1), Point(-1, .25, 1), Point(-.5, -.25, 1), Point(-.5, .25, 1),
+current_cluster_configuration_0 = [Point(-1, -.5, 0), Point(-1, .25, 0), Point(-.5, -.25, 1), Point(-.5, .25, 1),
                                    Point(0, -.25, 1), Point(0, .25, 1), Point(.5, -.5, 1), Point(.5, .25, 1)]
 
 clusters = [[0, 1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6], [5, 6, 7]]  # triangles
 
-'''
 
 '''
 fixed_cluster_configuration_0 = [Point(-.5, -.5, 1), Point(0, .25, 1), Point(.5, -.5, 1)]
@@ -259,6 +257,7 @@ def draw_loop(dt):
         # pygame.draw.circle(window, (255, 255, 255), (100, 100), 50, 0)
         # label = my_font.render(str(1 / dt), False, (0, 0, 0))
         # window.blit(label, (0, 0))
+
 def semi_implicit_euler_step(dt):
     for v in current_cluster_configuration_0:
         if(v.invmass != 0):
@@ -398,6 +397,9 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
     G = F.T * F - numpy.identity(2)
     constraint_vec = numpy.matrix([[G.item(0)], [G.item(3)], [G.item(1)]])
 
+
+    #calculate forces by f = sigma * n * length(area in 3d)
+    #sigma = lambda * trace(epsilon) + 2 * my * Matrixepsilon
     f1 = F[:, 0]
     f2 = F[:, 1]
 
@@ -416,6 +418,7 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
     p0_constraint_gradient = - constraint_gradient_without_p0[:, 0:2] - constraint_gradient_without_p0[:, 2:4]
 
     constraint_gradient = numpy.block([p0_constraint_gradient, constraint_gradient_without_p0])
+
 
     '''
     constraint_gradient_2 = numpy.block([[constraint_gradient[0:1, :], constraint_gradient[1:2, :]],
@@ -437,6 +440,8 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
     for v in cluster:
         positions[v].x_pos = positions[v].x_pos + delta_x.item(0 + 2 * i)
         positions[v].y_pos = positions[v].y_pos + delta_x.item(1 + 2 * i)
+        if v == 6:
+            print("vel = " + str(positions[v].y_vel) + " delta y update = " + str(delta_x.item(1 + 2*i)))
         i = i + 1
 
 
@@ -482,7 +487,7 @@ def project_constraints(k, positions, cluster_set, dt):
         # project_velocity_constraints(k, positions, cluster, dt)
 
 
-solverIterations = 5
+solverIterations = 20
 # in [0,1]
 stiffness = .01
 # correct stiffness, so that it is linear to k (stiffness)
@@ -509,13 +514,17 @@ def simulation_step(dt):
 
         project_constraints(corrected_stiffness, current_cluster_configuration_0, clusters, dt)
 
-        print("projected shape constraints in " + str(time.process_time() - begin_time) + " sec")
+        #print("projected shape constraints in " + str(time.process_time() - begin_time) + " sec")
+
 
     for curr_point in current_cluster_configuration_0:
         curr_point.x_vel = (curr_point.x_pos - curr_point.last_x_pos) / dt
         curr_point.last_x_pos = curr_point.x_pos
         curr_point.y_vel = (curr_point.y_pos - curr_point.last_y_pos) / dt  # hack
         curr_point.last_y_pos = curr_point.y_pos
+
+    print(current_cluster_configuration_0[6].y_vel)
+
     # print(get_pos_vec(current_cluster_configuration))
 
 
