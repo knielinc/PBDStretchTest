@@ -13,6 +13,8 @@ from scipy.spatial import Delaunay
 # TODO shape -> points, parameter // FLEX wo particle /materialien, selber scene machen, verschiebung/dehnung von einfachem würfel sei flex oder 2d
 
 USE_XPBD = True
+SIMULATION_TYPE = "FEM"  # SPRING, FEM
+
 WINDOW_HEIGHT = 800
 WINDOW_WIDTH = 800
 
@@ -25,7 +27,7 @@ window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.DOUBLEBUF
 
 pygame.display.set_caption("XPBD")
 
-FPS = 20
+FPS = 200
 clock = pygame.time.Clock()
 currentTime = 0
 lastFrameTime = 0
@@ -55,8 +57,8 @@ class Point:
         self.y_vel = 0
 
     def minus(self, other):
-        new_x_val = self.x_pos - other.x_val
-        new_y_val = self.y_pos - other.y_val
+        new_x_val = self.x_pos - other.x_pos
+        new_y_val = self.y_pos - other.y_pos
         return Point(new_x_val, new_y_val, self.invmass)
 
     def to_vec(self):
@@ -84,17 +86,17 @@ sequence_of_tuples = numpy.asmatrix(sequence_of_tuples)
 
 mat = scipy.io.loadmat('FEMTriangles.mat')
 
-#triplets = Delaunay(sequence_of_tuples)
-#clusters = triplets.simplices.tolist()
+# triplets = Delaunay(sequence_of_tuples)
+# clusters = triplets.simplices.tolist()
 
-triplets = mat.get('el') - 1 # because matlab indices are + 1
+triplets = mat.get('el') - 1  # because matlab indices are + 1
 clusters = triplets.tolist()
 
 
 def pointFromTuple(tuple):
     if (tuple[0] == 0 or tuple[0] == 1):
         return Point(tuple[0], tuple[1], 0)
-    return Point(tuple[0], tuple[1], 1.0/0.0002)
+    return Point(tuple[0], tuple[1], 1.0 / 0.0002)
 
 
 def deformedPointFromTuple(tuple):
@@ -103,13 +105,12 @@ def deformedPointFromTuple(tuple):
     if (tuple[0] == 1):
         return Point(tuple[0] + 0.2, tuple[1], 0)
 
-    return Point(tuple[0], tuple[1], 1.0/0.0002)
+    return Point(tuple[0], tuple[1], 1.0 / 0.0002)
 
 
 fixed_cluster_configuration_0 = list(map(pointFromTuple, sequence_of_tuples.tolist()))
 
 current_cluster_configuration_0 = list(map(deformedPointFromTuple, sequence_of_tuples.tolist()))
-
 
 fixed_cluster_configuration_0 = [Point(-1, -.5, 0), Point(-1, .25, 0), Point(-.5, -.25, 1), Point(-.5, .25, 1),
                                  Point(0, -.25, 1), Point(0, .25, 1), Point(.5, -.5, 1), Point(.5, .25, 1)]
@@ -119,6 +120,10 @@ current_cluster_configuration_0 = [Point(-1, -.5, 0), Point(-1, .25, 0), Point(-
 
 clusters = [[0, 1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6], [5, 6, 7]]  # triangles
 
+if SIMULATION_TYPE == "SPRING":
+    fixed_cluster_configuration_0 = [Point(-1, 0, 0), Point(-.5, 0, 1000), Point(.5, 0, 1000), Point(1, 0, 0)]
+    current_cluster_configuration_0 = [Point(-.9, 0, 0), Point(-.5, 0, 1000), Point(0.5, 0, 1000), Point(0.9, 0, 0)]
+    clusters = [[0, 1], [1, 2], [2, 3]]
 
 '''
 fixed_cluster_configuration_0 = [Point(-.5, -.5, 1), Point(0, .25, 1), Point(.5, -.5, 1)]
@@ -228,23 +233,26 @@ def get_center_of_mass(list_of_points):
 # init
 
 def draw_loop(dt):
-
     if USE_XPBD:
-        for curr_triangle in clusters:
-            pos1 = [math.floor(
-                current_cluster_configuration_0[curr_triangle[0]].x_pos * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2,
-                    math.floor(WINDOW_HEIGHT - ((current_cluster_configuration_0[
-                                                     curr_triangle[0]].y_pos * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))]
-            pos2 = [math.floor(
-                current_cluster_configuration_0[curr_triangle[1]].x_pos * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2,
-                    math.floor(WINDOW_HEIGHT - ((current_cluster_configuration_0[
-                                                     curr_triangle[1]].y_pos * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))]
-            pos3 = [math.floor(
-                current_cluster_configuration_0[curr_triangle[2]].x_pos * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2,
-                    math.floor(WINDOW_HEIGHT - ((current_cluster_configuration_0[
-                                                     curr_triangle[2]].y_pos * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))]
+        if SIMULATION_TYPE == "FEM":
+            for curr_triangle in clusters:
+                pos1 = [math.floor(
+                    current_cluster_configuration_0[curr_triangle[0]].x_pos * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2,
+                        math.floor(WINDOW_HEIGHT - ((current_cluster_configuration_0[
+                                                         curr_triangle[
+                                                             0]].y_pos * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))]
+                pos2 = [math.floor(
+                    current_cluster_configuration_0[curr_triangle[1]].x_pos * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2,
+                        math.floor(WINDOW_HEIGHT - ((current_cluster_configuration_0[
+                                                         curr_triangle[
+                                                             1]].y_pos * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))]
+                pos3 = [math.floor(
+                    current_cluster_configuration_0[curr_triangle[2]].x_pos * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2,
+                        math.floor(WINDOW_HEIGHT - ((current_cluster_configuration_0[
+                                                         curr_triangle[
+                                                             2]].y_pos * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))]
 
-            pygame.draw.lines(window, (255, 255, 255), True, [pos1, pos2, pos3], 2)
+                pygame.draw.lines(window, (255, 255, 255), True, [pos1, pos2, pos3], 2)
 
     for curr_point in current_cluster_configuration_0:
         pygame.draw.circle(window,
@@ -258,9 +266,10 @@ def draw_loop(dt):
         # label = my_font.render(str(1 / dt), False, (0, 0, 0))
         # window.blit(label, (0, 0))
 
+
 def semi_implicit_euler_step(dt):
     for v in current_cluster_configuration_0:
-        if(v.invmass != 0):
+        if (v.invmass != 0):
             v.x_vel = v.x_vel  # ext force in x
             v.y_vel = v.y_vel - (dt * (gravity))  # gravity
             v.x_pos = v.x_pos + dt * v.x_vel
@@ -277,7 +286,7 @@ def get_pos_vec(list_p):
 def get_mass_vec(list_p):
     m = []
     for curr_point in list_p:
-        m.append(1./curr_point.invmass)
+        m.append(1. / curr_point.invmass)
     return m
 
 
@@ -392,8 +401,8 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
         inv_mass_matrix[i * 2, i * 2] = curr_positions[i].invmass
         inv_mass_matrix[i * 2 + 1, i * 2 + 1] = curr_positions[i].invmass
         if curr_positions[i].invmass != 0:
-            mass_matrix[i * 2, i * 2] = 1.0/curr_positions[i].invmass
-            inv_mass_matrix[i * 2 + 1, i * 2 + 1] = 1.0/curr_positions[i].invmass
+            mass_matrix[i * 2, i * 2] = 1.0 / curr_positions[i].invmass
+            inv_mass_matrix[i * 2 + 1, i * 2 + 1] = 1.0 / curr_positions[i].invmass
 
     P = get_Ps(curr_cluster_index)
     Qi = precalculated_Qis[curr_cluster_index]
@@ -401,9 +410,8 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
     G = F.T * F - numpy.identity(2)
     constraint_vec = numpy.matrix([[G.item(0)], [G.item(3)], [G.item(1)]])
 
-
-    #calculate forces by f = sigma * n * length(area in 3d)
-    #sigma = lambda * trace(epsilon) + 2 * my * Matrixepsilon
+    # calculate forces by f = sigma * n * length(area in 3d)
+    # sigma = lambda * trace(epsilon) + 2 * my * Matrixepsilon
     f1 = F[:, 0]
     f2 = F[:, 1]
 
@@ -422,7 +430,6 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
     p0_constraint_gradient = - constraint_gradient_without_p0[:, 0:2] - constraint_gradient_without_p0[:, 2:4]
 
     constraint_gradient = numpy.block([p0_constraint_gradient, constraint_gradient_without_p0])
-
 
     '''
     constraint_gradient_2 = numpy.block([[constraint_gradient[0:1, :], constraint_gradient[1:2, :]],
@@ -444,10 +451,52 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
     for v in cluster:
         positions[v].x_pos = positions[v].x_pos + delta_x.item(0 + 2 * i)
         positions[v].y_pos = positions[v].y_pos + delta_x.item(1 + 2 * i)
-        #if v == 6:
-        #print("vel = " + str(positions[v].y_vel) + " delta y update = " + str(delta_x.item(1 + 2*i)))
+        # if v == 6:
+        # print("vel = " + str(positions[v].y_vel) + " delta y update = " + str(delta_x.item(1 + 2*i)))
         i = i + 1
-    print ("cluster: " + str(curr_cluster_index) + ": " + str(numpy.linalg.norm(mass_matrix * delta_x - constraint_vec.T * delta_lambda)))
+    print("cluster: " + str(curr_cluster_index) + ": " + str(
+        numpy.linalg.norm(mass_matrix * delta_x - constraint_vec.T * delta_lambda)))
+
+
+def project_spring_constraints(k, positions, cluster, curr_cluster_index, dt):
+    curr_positions = []
+    fixed_positions = []
+
+    for v in cluster:
+        curr_positions.append(current_cluster_configuration_0[v])
+        fixed_positions.append(fixed_cluster_configuration_0[v])
+
+    sum_mass = curr_positions[0].invmass + curr_positions[1].invmass
+    if sum_mass == 0:
+        return
+    p1_minus_p2 = curr_positions[0].minus(curr_positions[1])
+    q1_minus_q2 = fixed_positions[0].minus(fixed_positions[1])
+
+    p1_minus_p2 = p1_minus_p2.to_vec()
+    q1_minus_q2 = q1_minus_q2.to_vec()
+
+    distance = numpy.sqrt(p1_minus_p2.T.dot(p1_minus_p2)).item(0)
+    restLength = numpy.sqrt(q1_minus_q2.T.dot(q1_minus_q2)).item(0)
+
+    constraint = distance - restLength
+
+    m_Compliance = 0.000000000000000000001  # rubber
+    m_Compliance /= dt * dt
+
+    m_Lambda = lagrange_multipliers[curr_cluster_index]
+
+    delta_lambda = (-constraint - m_Compliance * m_Lambda) / (sum_mass + m_Compliance)
+    delta_x = delta_lambda * p1_minus_p2 / (distance)
+    #print(delta_x)
+    #lagrange_multipliers[curr_cluster_index] = lagrange_multipliers[curr_cluster_index] + delta_lambda
+
+    positions[cluster[0]].x_pos = positions[cluster[0]].x_pos + (curr_positions[0].invmass * delta_x.item(0))
+    positions[cluster[0]].y_pos = positions[cluster[0]].y_pos + (curr_positions[0].invmass * delta_x.item(1))
+
+    print(positions[cluster[0]].x_pos)
+
+    positions[cluster[1]].x_pos = positions[cluster[1]].x_pos + (-curr_positions[1].invmass * delta_x.item(0))
+    positions[cluster[1]].y_pos = positions[cluster[1]].y_pos + (-curr_positions[1].invmass * delta_x.item(1))
 
 
 def project_collision_constraints(k, positions):
@@ -483,7 +532,10 @@ def project_velocity_constraints(k, positions, cluster, dt):
 def project_constraints(k, positions, cluster_set, dt):
     for i in range(len(cluster_set)):
         if USE_XPBD:
-            project_shape_constraints_new(k, positions, cluster_set[i], i, dt)
+            if SIMULATION_TYPE == "FEM":
+                project_shape_constraints_new(k, positions, cluster_set[i], i, dt)
+            if SIMULATION_TYPE == "SPRING":
+                project_spring_constraints(k, positions, cluster_set[i], i, dt)
 
         if not USE_XPBD:
             project_shape_constraints(k, positions, cluster_set[i], i)
@@ -492,7 +544,7 @@ def project_constraints(k, positions, cluster_set, dt):
         # project_velocity_constraints(k, positions, cluster, dt)
 
 
-solverIterations = 20
+solverIterations = 2
 # in [0,1]
 stiffness = .01
 # correct stiffness, so that it is linear to k (stiffness)
@@ -504,7 +556,10 @@ corrected_stiffness = 1 - ((1 - stiffness) ** solverIterations)
 
 def init_lagrange_multiplier(nr_of_constraints):
     for i in range(nr_of_constraints):
-        lagrange_multipliers.append(numpy.matrix([[0], [0], [0]]))
+        if SIMULATION_TYPE == "FEM":
+            lagrange_multipliers.append(numpy.matrix([[0], [0], [0]]))
+        if SIMULATION_TYPE == "SPRING":
+            lagrange_multipliers.append(0)
 
 
 def simulation_step(dt):
@@ -526,7 +581,7 @@ def simulation_step(dt):
         curr_point.y_vel = (curr_point.y_pos - curr_point.last_y_pos) / dt
         curr_point.last_y_pos = curr_point.y_pos
 
-    print(current_cluster_configuration_0[6].y_vel)
+    # print(current_cluster_configuration_0[6].y_vel)
 
     # print(get_pos_vec(current_cluster_configuration))
 
@@ -539,7 +594,8 @@ currentTime = time.process_time()
 lastFrameTime = time.process_time()
 running = True
 # init_scene()
-precalculate_Qis()
+if SIMULATION_TYPE == "FEM":
+    precalculate_Qis()
 
 while running:
     # sleepTime = 1. / FPS - (currentTime - lastFrameTime)
@@ -566,7 +622,8 @@ while running:
 
     if frame_count % 30 == 0:
         frame_rate_t1 = time.process_time()
-        frame_rate = 30 / (frame_rate_t1 - frame_rate_t0)
+        if ((frame_rate_t1 - frame_rate_t0) > 0):
+            frame_rate = 30 / (frame_rate_t1 - frame_rate_t0)
         pygame.display.set_caption("Stretch Test | FPS: " + str(frame_rate))
         frame_rate_t0 = frame_rate_t1
 
