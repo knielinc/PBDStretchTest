@@ -13,7 +13,7 @@ from scipy.spatial import Delaunay
 # TODO shape -> points, parameter // FLEX wo particle /materialien, selber scene machen, verschiebung/dehnung von einfachem würfel sei flex oder 2d
 
 USE_XPBD = True
-SIMULATION_TYPE = "FEM"  # SPRING, FEM
+SIMULATION_TYPE = "SPRING"  # SPRING, FEM
 
 WINDOW_HEIGHT = 800
 WINDOW_WIDTH = 800
@@ -27,7 +27,7 @@ window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.DOUBLEBUF
 
 pygame.display.set_caption("XPBD")
 
-FPS = 200
+FPS = 60
 clock = pygame.time.Clock()
 currentTime = 0
 lastFrameTime = 0
@@ -121,8 +121,8 @@ current_cluster_configuration_0 = [Point(-1, -.5, 0), Point(-1, .25, 0), Point(-
 clusters = [[0, 1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6], [5, 6, 7]]  # triangles
 
 if SIMULATION_TYPE == "SPRING":
-    fixed_cluster_configuration_0 = [Point(-1, 0, 0), Point(-.5, 0, 1000), Point(.5, 0, 1000), Point(1, 0, 0)]
-    current_cluster_configuration_0 = [Point(-.9, 0, 0), Point(-.5, 0, 1000), Point(0.5, 0, 1000), Point(0.9, 0, 0)]
+    fixed_cluster_configuration_0 = [Point(-.5, 0, 0), Point(-.25, 0, 1000), Point(.25, 0, 1000), Point(.5, 0, 0)]
+    current_cluster_configuration_0 = [Point(-1, 0, 0), Point(-.5, 0, 1000), Point(0.5, 0, 1000), Point(1, 0, 0)]
     clusters = [[0, 1], [1, 2], [2, 3]]
 
 '''
@@ -469,31 +469,37 @@ def project_spring_constraints(k, positions, cluster, curr_cluster_index, dt):
     sum_mass = curr_positions[0].invmass + curr_positions[1].invmass
     if sum_mass == 0:
         return
-    p1_minus_p2 = curr_positions[0].minus(curr_positions[1])
-    q1_minus_q2 = fixed_positions[0].minus(fixed_positions[1])
 
-    p1_minus_p2 = p1_minus_p2.to_vec()
-    q1_minus_q2 = q1_minus_q2.to_vec()
+    p1 = curr_positions[0].to_vec()
+    p2 = curr_positions[1].to_vec()
+
+    q1 = fixed_positions[0].to_vec()
+    q2 = fixed_positions[1].to_vec()
+
+    p1_minus_p2 = p1 - p2
+    q1_minus_q2 = q1 - q2
 
     distance = numpy.sqrt(p1_minus_p2.T.dot(p1_minus_p2)).item(0)
     restLength = numpy.sqrt(q1_minus_q2.T.dot(q1_minus_q2)).item(0)
 
     constraint = distance - restLength
 
-    m_Compliance = 0.000000000000000000001  # rubber
+    m_Compliance = 10  # rubber
     m_Compliance /= dt * dt
 
     m_Lambda = lagrange_multipliers[curr_cluster_index]
 
     delta_lambda = (-constraint - m_Compliance * m_Lambda) / (sum_mass + m_Compliance)
     delta_x = delta_lambda * p1_minus_p2 / (distance)
-    #print(delta_x)
+    print("constraint:" + str(constraint))
+    print((curr_positions[0].invmass * delta_x.item(0)))
+    print((-curr_positions[1].invmass * delta_x.item(0)))
     #lagrange_multipliers[curr_cluster_index] = lagrange_multipliers[curr_cluster_index] + delta_lambda
 
     positions[cluster[0]].x_pos = positions[cluster[0]].x_pos + (curr_positions[0].invmass * delta_x.item(0))
     positions[cluster[0]].y_pos = positions[cluster[0]].y_pos + (curr_positions[0].invmass * delta_x.item(1))
 
-    print(positions[cluster[0]].x_pos)
+    #print(positions[cluster[0]].x_pos)
 
     positions[cluster[1]].x_pos = positions[cluster[1]].x_pos + (-curr_positions[1].invmass * delta_x.item(0))
     positions[cluster[1]].y_pos = positions[cluster[1]].y_pos + (-curr_positions[1].invmass * delta_x.item(1))
@@ -544,7 +550,7 @@ def project_constraints(k, positions, cluster_set, dt):
         # project_velocity_constraints(k, positions, cluster, dt)
 
 
-solverIterations = 2
+solverIterations = 20
 # in [0,1]
 stiffness = .01
 # correct stiffness, so that it is linear to k (stiffness)
