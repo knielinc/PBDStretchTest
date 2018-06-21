@@ -386,10 +386,14 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
         fixed_positions.append(fixed_cluster_configuration_0[v])
 
     inv_mass_matrix = numpy.asmatrix(numpy.zeros(shape=(len(cluster) * 2, len(cluster) * 2)))
+    mass_matrix = numpy.asmatrix(numpy.zeros(shape=(len(cluster) * 2, len(cluster) * 2)))
 
     for i in range(len(curr_positions)):
         inv_mass_matrix[i * 2, i * 2] = curr_positions[i].invmass
         inv_mass_matrix[i * 2 + 1, i * 2 + 1] = curr_positions[i].invmass
+        if curr_positions[i].invmass != 0:
+            mass_matrix[i * 2, i * 2] = 1.0/curr_positions[i].invmass
+            inv_mass_matrix[i * 2 + 1, i * 2 + 1] = 1.0/curr_positions[i].invmass
 
     P = get_Ps(curr_cluster_index)
     Qi = precalculated_Qis[curr_cluster_index]
@@ -440,9 +444,10 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
     for v in cluster:
         positions[v].x_pos = positions[v].x_pos + delta_x.item(0 + 2 * i)
         positions[v].y_pos = positions[v].y_pos + delta_x.item(1 + 2 * i)
-        if v == 6:
-            print("vel = " + str(positions[v].y_vel) + " delta y update = " + str(delta_x.item(1 + 2*i)))
+        #if v == 6:
+        #print("vel = " + str(positions[v].y_vel) + " delta y update = " + str(delta_x.item(1 + 2*i)))
         i = i + 1
+    print ("cluster: " + str(curr_cluster_index) + ": " + str(numpy.linalg.norm(mass_matrix * delta_x - constraint_vec.T * delta_lambda)))
 
 
 def project_collision_constraints(k, positions):
@@ -513,14 +518,12 @@ def simulation_step(dt):
         begin_time = time.process_time()
 
         project_constraints(corrected_stiffness, current_cluster_configuration_0, clusters, dt)
-
-        #print("projected shape constraints in " + str(time.process_time() - begin_time) + " sec")
-
+        print("projected shape constraints in " + str(time.process_time() - begin_time) + " sec, step nr: " + str(i))
 
     for curr_point in current_cluster_configuration_0:
         curr_point.x_vel = (curr_point.x_pos - curr_point.last_x_pos) / dt
         curr_point.last_x_pos = curr_point.x_pos
-        curr_point.y_vel = (curr_point.y_pos - curr_point.last_y_pos) / dt  # hack
+        curr_point.y_vel = (curr_point.y_pos - curr_point.last_y_pos) / dt
         curr_point.last_y_pos = curr_point.y_pos
 
     print(current_cluster_configuration_0[6].y_vel)
