@@ -13,7 +13,7 @@ from scipy.spatial import Delaunay
 # TODO shape -> points, parameter // FLEX wo particle /materialien, selber scene machen, verschiebung/dehnung von einfachem würfel sei flex oder 2d
 
 USE_XPBD = True
-SIMULATION_TYPE = "SPRING"  # SPRING, FEM
+SIMULATION_TYPE = "FEM"  # SPRING, FEM
 
 WINDOW_HEIGHT = 800
 WINDOW_WIDTH = 800
@@ -27,14 +27,14 @@ window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.DOUBLEBUF
 
 pygame.display.set_caption("XPBD")
 
-FPS = 60
+FPS = 100
 clock = pygame.time.Clock()
 currentTime = 0
 lastFrameTime = 0
 
 # lamé parameters
-lame_youngs_modulus = 10 ** 6
-lame_poisson_ratio = 0  # apparently poisson ratio
+lame_youngs_modulus = 10 ** 2
+lame_poisson_ratio = 0.3  # apparently poisson ratio
 lame_mu = lame_youngs_modulus / (2 * (1 + lame_poisson_ratio))
 lame_lambda = lame_youngs_modulus * lame_poisson_ratio / ((1 + lame_poisson_ratio) * (1 - 2 * lame_poisson_ratio))  #
 
@@ -121,9 +121,9 @@ current_cluster_configuration_0 = [Point(-1, -.5, 0), Point(-1, .25, 0), Point(-
 clusters = [[0, 1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6], [5, 6, 7]]  # triangles
 
 if SIMULATION_TYPE == "SPRING":
-    fixed_cluster_configuration_0 = [Point(-.5, 0, 0), Point(-.25, 0, 1000), Point(.25, 0, 1000), Point(.5, 0, 0)]
-    current_cluster_configuration_0 = [Point(-1, 0, 0), Point(-.5, 0, 1000), Point(0.5, 0, 1000), Point(1, 0, 0)]
-    clusters = [[0, 1], [1, 2], [2, 3]]
+    fixed_cluster_configuration_0 = [Point(-1, 0, 0), Point(-.5, 0, 10), Point(.5, 0, 10), Point(1, 0, 0)]
+    current_cluster_configuration_0 = [Point(-.9, 0, 0), Point(-.5, 0, 10), Point(.5, 0, 10), Point(.9, 0, 0)]
+    clusters = [[0, 1],[1, 2],[2, 3]]
 
 '''
 fixed_cluster_configuration_0 = [Point(-.5, -.5, 1), Point(0, .25, 1), Point(.5, -.5, 1)]
@@ -454,8 +454,7 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
         # if v == 6:
         # print("vel = " + str(positions[v].y_vel) + " delta y update = " + str(delta_x.item(1 + 2*i)))
         i = i + 1
-    print("cluster: " + str(curr_cluster_index) + ": " + str(
-        numpy.linalg.norm(mass_matrix * delta_x - constraint_vec.T * delta_lambda)))
+    #print("cluster: " + str(curr_cluster_index) + ": " + str(numpy.linalg.norm(mass_matrix * delta_x - constraint_vec.T * delta_lambda)))
 
 
 def project_spring_constraints(k, positions, cluster, curr_cluster_index, dt):
@@ -484,17 +483,20 @@ def project_spring_constraints(k, positions, cluster, curr_cluster_index, dt):
 
     constraint = distance - restLength
 
-    m_Compliance = 10  # rubber
+    m_Compliance = 0.25  # rubber
     m_Compliance /= dt * dt
 
     m_Lambda = lagrange_multipliers[curr_cluster_index]
 
     delta_lambda = (-constraint - m_Compliance * m_Lambda) / (sum_mass + m_Compliance)
     delta_x = delta_lambda * p1_minus_p2 / (distance)
+
     print("constraint:" + str(constraint))
+    print(delta_lambda)
     print((curr_positions[0].invmass * delta_x.item(0)))
     print((-curr_positions[1].invmass * delta_x.item(0)))
-    #lagrange_multipliers[curr_cluster_index] = lagrange_multipliers[curr_cluster_index] + delta_lambda
+
+    lagrange_multipliers[curr_cluster_index] = lagrange_multipliers[curr_cluster_index] + delta_lambda
 
     positions[cluster[0]].x_pos = positions[cluster[0]].x_pos + (curr_positions[0].invmass * delta_x.item(0))
     positions[cluster[0]].y_pos = positions[cluster[0]].y_pos + (curr_positions[0].invmass * delta_x.item(1))
@@ -550,9 +552,9 @@ def project_constraints(k, positions, cluster_set, dt):
         # project_velocity_constraints(k, positions, cluster, dt)
 
 
-solverIterations = 20
+solverIterations = 5
 # in [0,1]
-stiffness = .01
+stiffness = .0000000000000001
 # correct stiffness, so that it is linear to k (stiffness)
 corrected_stiffness = 1 - ((1 - stiffness) ** solverIterations)
 
@@ -561,6 +563,7 @@ corrected_stiffness = 1 - ((1 - stiffness) ** solverIterations)
 
 
 def init_lagrange_multiplier(nr_of_constraints):
+    lagrange_multipliers.clear()
     for i in range(nr_of_constraints):
         if SIMULATION_TYPE == "FEM":
             lagrange_multipliers.append(numpy.matrix([[0], [0], [0]]))
@@ -579,7 +582,7 @@ def simulation_step(dt):
         begin_time = time.process_time()
 
         project_constraints(corrected_stiffness, current_cluster_configuration_0, clusters, dt)
-        print("projected shape constraints in " + str(time.process_time() - begin_time) + " sec, step nr: " + str(i))
+        #print("projected shape constraints in " + str(time.process_time() - begin_time) + " sec, step nr: " + str(i))
 
     for curr_point in current_cluster_configuration_0:
         curr_point.x_vel = (curr_point.x_pos - curr_point.last_x_pos) / dt
