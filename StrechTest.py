@@ -13,7 +13,7 @@ from scipy.spatial import Delaunay
 # TODO shape -> points, parameter // FLEX wo particle /materialien, selber scene machen, verschiebung/dehnung von einfachem würfel sei flex oder 2d
 
 USE_XPBD = True
-SIMULATION_TYPE = "FEM"  # SPRING, FEM
+SIMULATION_TYPE = "SPRING"  # SPRING, FEM
 
 WINDOW_HEIGHT = 800
 WINDOW_WIDTH = 800
@@ -27,7 +27,7 @@ window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.DOUBLEBUF
 
 pygame.display.set_caption("XPBD")
 
-FPS = 100
+FPS = 60
 clock = pygame.time.Clock()
 currentTime = 0
 lastFrameTime = 0
@@ -35,8 +35,8 @@ lastFrameTime = 0
 # lamé parameters
 lame_youngs_modulus = 10 ** 2
 lame_poisson_ratio = 0.3  # apparently poisson ratio
-lame_mu = lame_youngs_modulus / (2 * (1 + lame_poisson_ratio))
-lame_lambda = lame_youngs_modulus * lame_poisson_ratio / ((1 + lame_poisson_ratio) * (1 - 2 * lame_poisson_ratio))  #
+lame_mu = 1#lame_youngs_modulus / (2 * (1 + lame_poisson_ratio))
+lame_lambda = 5#lame_youngs_modulus * lame_poisson_ratio / ((1 + lame_poisson_ratio) * (1 - 2 * lame_poisson_ratio))  #
 
 stiffness_matrix = numpy.matrix([[lame_lambda + 2 * lame_mu, lame_lambda, 0],
                                  [lame_lambda, lame_lambda + 2 * lame_mu, 0],
@@ -81,8 +81,9 @@ meshgrid_array = numpy.linspace(0, 1, math.ceil(1 / h))
 x_vals_vec = numpy.reshape(x_vals.T, (100, 1))
 y_vals_vec = numpy.reshape(y_vals.T, (100, 1))
 
-sequence_of_tuples = numpy.block([x_vals_vec, y_vals_vec])
+sequence_of_tuples = numpy.block([x_vals_vec-.3, y_vals_vec])
 sequence_of_tuples = numpy.asmatrix(sequence_of_tuples)
+
 
 mat = scipy.io.loadmat('FEMTriangles.mat')
 
@@ -93,25 +94,27 @@ triplets = mat.get('el') - 1  # because matlab indices are + 1
 clusters = triplets.tolist()
 
 
+#810
 def pointFromTuple(tuple):
-    if (tuple[0] == 0 or tuple[0] == 1):
+    if (tuple[0] == -.3 or tuple[0] == .7):
         return Point(tuple[0], tuple[1], 0)
-    return Point(tuple[0], tuple[1], 1.0 / 0.0002)
+    return Point(tuple[0], tuple[1], 810)
 
 
 def deformedPointFromTuple(tuple):
-    if (tuple[0] == 0):
+    if (tuple[0] == -0.3):
         return Point(tuple[0] - 0.2, tuple[1], 0)
-    if (tuple[0] == 1):
-        return Point(tuple[0] + 0.2, tuple[1], 0)
+    if (tuple[0] == .7):
+        return Point(tuple[0] + 0.3, tuple[1], 0)
 
-    return Point(tuple[0], tuple[1], 1.0 / 0.0002)
+    return Point(tuple[0], tuple[1], 810)
 
 
 fixed_cluster_configuration_0 = list(map(pointFromTuple, sequence_of_tuples.tolist()))
 
 current_cluster_configuration_0 = list(map(deformedPointFromTuple, sequence_of_tuples.tolist()))
 
+'''
 fixed_cluster_configuration_0 = [Point(-1, -.5, 0), Point(-1, .25, 0), Point(-.5, -.25, 1), Point(-.5, .25, 1),
                                  Point(0, -.25, 1), Point(0, .25, 1), Point(.5, -.5, 1), Point(.5, .25, 1)]
 
@@ -119,12 +122,17 @@ current_cluster_configuration_0 = [Point(-1, -.5, 0), Point(-1, .25, 0), Point(-
                                    Point(0, -.25, 1), Point(0, .25, 1), Point(.5, -.5, 1), Point(.5, .25, 1)]
 
 clusters = [[0, 1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6], [5, 6, 7]]  # triangles
-
+'''
+'''
 if SIMULATION_TYPE == "SPRING":
     fixed_cluster_configuration_0 = [Point(-1, 0, 0), Point(-.5, 0, 10), Point(.5, 0, 10), Point(1, 0, 0)]
     current_cluster_configuration_0 = [Point(-.9, 0, 0), Point(-.5, 0, 10), Point(.5, 0, 10), Point(.9, 0, 0)]
     clusters = [[0, 1],[1, 2],[2, 3]]
-
+'''
+if SIMULATION_TYPE == "SPRING":
+    fixed_cluster_configuration_0 = [Point(0, 0, 0), Point(0, 0, 1)]
+    current_cluster_configuration_0 = [Point(0, 0, 0), Point(0, 1, 1)]
+    clusters = [[0, 1]]
 '''
 fixed_cluster_configuration_0 = [Point(-.5, -.5, 1), Point(0, .25, 1), Point(.5, -.5, 1)]
 
@@ -271,7 +279,7 @@ def semi_implicit_euler_step(dt):
     for v in current_cluster_configuration_0:
         if (v.invmass != 0):
             v.x_vel = v.x_vel  # ext force in x
-            v.y_vel = v.y_vel - (dt * (gravity))  # gravity
+            v.y_vel = v.y_vel #- (dt * (gravity))  # gravity
             v.x_pos = v.x_pos + dt * v.x_vel
             v.y_pos = v.y_pos + dt * v.y_vel
 
@@ -402,7 +410,7 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
         inv_mass_matrix[i * 2 + 1, i * 2 + 1] = curr_positions[i].invmass
         if curr_positions[i].invmass != 0:
             mass_matrix[i * 2, i * 2] = 1.0 / curr_positions[i].invmass
-            inv_mass_matrix[i * 2 + 1, i * 2 + 1] = 1.0 / curr_positions[i].invmass
+            mass_matrix[i * 2 + 1, i * 2 + 1] = 1.0 / curr_positions[i].invmass
 
     P = get_Ps(curr_cluster_index)
     Qi = precalculated_Qis[curr_cluster_index]
@@ -491,10 +499,10 @@ def project_spring_constraints(k, positions, cluster, curr_cluster_index, dt):
     delta_lambda = (-constraint - m_Compliance * m_Lambda) / (sum_mass + m_Compliance)
     delta_x = delta_lambda * p1_minus_p2 / (distance)
 
-    print("constraint:" + str(constraint))
-    print(delta_lambda)
-    print((curr_positions[0].invmass * delta_x.item(0)))
-    print((-curr_positions[1].invmass * delta_x.item(0)))
+    #print("constraint:" + str(constraint))
+    #print(delta_lambda)
+    #print((curr_positions[0].invmass * delta_x.item(0)))
+    #print((-curr_positions[1].invmass * delta_x.item(0)))
 
     lagrange_multipliers[curr_cluster_index] = lagrange_multipliers[curr_cluster_index] + delta_lambda
 
@@ -552,7 +560,7 @@ def project_constraints(k, positions, cluster_set, dt):
         # project_velocity_constraints(k, positions, cluster, dt)
 
 
-solverIterations = 5
+solverIterations = 3
 # in [0,1]
 stiffness = .0000000000000001
 # correct stiffness, so that it is linear to k (stiffness)
@@ -637,7 +645,7 @@ while running:
         frame_rate_t0 = frame_rate_t1
 
     # pygame.draw.circle(window, (255, 255, 255), (xpos, 100), 50, 0)
-
+    print(frame_count)
     pygame.display.flip()
 
 pygame.quit()
