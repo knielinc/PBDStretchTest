@@ -13,13 +13,13 @@ from scipy.spatial import Delaunay
 # TODO shape -> points, parameter // FLEX wo particle /materialien, selber scene machen, verschiebung/dehnung von einfachem würfel sei flex oder 2d
 
 USE_XPBD = True
-SIMULATION_TYPE = "SPRING"  # SPRING, FEM
+SIMULATION_TYPE = "FEM"  # SPRING, FEM
 
 WINDOW_HEIGHT = 800
 WINDOW_WIDTH = 800
 
 gravity = 9.81
-
+GRAVITY_ON = False
 pygame.init()
 pygame.font.init()
 
@@ -36,7 +36,7 @@ lastFrameTime = 0
 lame_youngs_modulus = 10 ** 2
 lame_poisson_ratio = 0.3  # apparently poisson ratio
 lame_mu = 1#lame_youngs_modulus / (2 * (1 + lame_poisson_ratio))
-lame_lambda = 5#lame_youngs_modulus * lame_poisson_ratio / ((1 + lame_poisson_ratio) * (1 - 2 * lame_poisson_ratio))  #
+lame_lambda = .5#lame_youngs_modulus * lame_poisson_ratio / ((1 + lame_poisson_ratio) * (1 - 2 * lame_poisson_ratio))  #
 
 stiffness_matrix = numpy.matrix([[lame_lambda + 2 * lame_mu, lame_lambda, 0],
                                  [lame_lambda, lame_lambda + 2 * lame_mu, 0],
@@ -55,7 +55,7 @@ class Point:
         self.invmass = invmass
         self.x_vel = 0
         self.y_vel = 0
-
+        self.strain_force = None
     def minus(self, other):
         new_x_val = self.x_pos - other.x_pos
         new_y_val = self.y_pos - other.y_pos
@@ -114,15 +114,25 @@ fixed_cluster_configuration_0 = list(map(pointFromTuple, sequence_of_tuples.toli
 
 current_cluster_configuration_0 = list(map(deformedPointFromTuple, sequence_of_tuples.tolist()))
 
-'''
-fixed_cluster_configuration_0 = [Point(-1, -.5, 0), Point(-1, .25, 0), Point(-.5, -.25, 1), Point(-.5, .25, 1),
-                                 Point(0, -.25, 1), Point(0, .25, 1), Point(.5, -.5, 1), Point(.5, .25, 1)]
 
-current_cluster_configuration_0 = [Point(-1, -.5, 0), Point(-1, .25, 0), Point(-.5, -.25, 1), Point(-.5, .25, 1),
-                                   Point(0, -.25, 1), Point(0, .25, 1), Point(.5, -.5, 1), Point(.5, .25, 1)]
+inv_mass_bsp_1 = 10000
+
+fixed_cluster_configuration_0 = [Point(-1, -.5, 0), Point(-1, .25, 0), Point(-.5, -.5, inv_mass_bsp_1), Point(-.5, .25, inv_mass_bsp_1),
+                                 Point(0, -.5, inv_mass_bsp_1), Point(0, .25, inv_mass_bsp_1), Point(.5, -.5, 0), Point(.5, .25, 0)]
+
+current_cluster_configuration_0 = [Point(-1, -.5, 0), Point(-1, .25, 0), Point(-.5, -.5, inv_mass_bsp_1), Point(-.5, .25, inv_mass_bsp_1),
+                                   Point(0, -.5, inv_mass_bsp_1), Point(0, .25, inv_mass_bsp_1), Point(.7, -.5, 0), Point(.7, .25, 0)]
 
 clusters = [[0, 1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6], [5, 6, 7]]  # triangles
+
 '''
+fixed_cluster_configuration_0 = [Point(-.3, 0, 1), Point(0, -.4, 0), Point(.3, 0, 1)]
+
+current_cluster_configuration_0 = [Point(-.3, 0, 1), Point(0, -.4, 0), Point(.3, 0, 1)]
+
+clusters = [[0, 1, 2]]  # triangles
+'''
+
 '''
 if SIMULATION_TYPE == "SPRING":
     fixed_cluster_configuration_0 = [Point(-1, 0, 0), Point(-.5, 0, 10), Point(.5, 0, 10), Point(1, 0, 0)]
@@ -269,6 +279,11 @@ def draw_loop(dt):
                             math.floor(WINDOW_HEIGHT - ((curr_point.y_pos * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))),
                            5,
                            0)
+        pos1 = [math.floor((curr_point.x_pos * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2),
+                           math.floor(WINDOW_HEIGHT - ((curr_point.y_pos * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))]
+        pos2 = [math.floor((curr_point.x_pos + curr_point.strain_force.item(0))* WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2,
+                math.floor(WINDOW_HEIGHT - (((curr_point.y_pos + curr_point.strain_force.item(1)) * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))]
+        pygame.draw.lines(window, (0, 0, 255), True, [pos1, pos2], 2)
         # print("x = " + str(math.floor((curr_point.x_val * WINDOW_WIDTH/2) + WINDOW_WIDTH / 2)) + " y = " + str(math.floor(WINDOW_HEIGHT - ((curr_point.y_val * WINDOW_HEIGHT/2) + WINDOW_HEIGHT / 2))))
         # pygame.draw.circle(window, (255, 255, 255), (100, 100), 50, 0)
         # label = my_font.render(str(1 / dt), False, (0, 0, 0))
@@ -278,8 +293,11 @@ def draw_loop(dt):
 def semi_implicit_euler_step(dt):
     for v in current_cluster_configuration_0:
         if (v.invmass != 0):
-            v.x_vel = v.x_vel  # ext force in x
-            v.y_vel = v.y_vel #- (dt * (gravity))  # gravity
+
+            if GRAVITY_ON:
+                v.x_vel = v.x_vel  # ext force in x
+                v.y_vel = v.y_vel - (dt * (gravity))  # gravity
+
             v.x_pos = v.x_pos + dt * v.x_vel
             v.y_pos = v.y_pos + dt * v.y_vel
 
@@ -418,8 +436,27 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
     G = F.T * F - numpy.identity(2)
     constraint_vec = numpy.matrix([[G.item(0)], [G.item(3)], [G.item(1)]])
 
+    # strain def:
     # calculate forces by f = sigma * n * length(area in 3d)
+    # hooke's law:
     # sigma = lambda * trace(epsilon) + 2 * my * Matrixepsilon
+
+    #programming attempt
+    sigma = lame_lambda * numpy.trace(G) * numpy.identity(2) + 2 * lame_mu * G
+
+    for i in range(3):
+        pos_1_index = i
+        pos_2_index = (i + 1) % 3
+        #pos_3_index = (i + 2) % 3
+        edge_i = curr_positions[pos_2_index].minus(curr_positions[pos_1_index])
+        normal_vec_i = numpy.matrix([-edge_i.y_pos, edge_i.x_pos])
+        #length_edge_i = sqrt(edge_i.y*edge_i.y + edge_i.x * edge_i.x)
+        #normalization not necessary, because we would multiply the length anyway
+        force_i = sigma * normal_vec_i.T
+        curr_positions[pos_1_index].strain_force += force_i / 16
+        curr_positions[pos_2_index].strain_force += force_i / 16
+
+
     f1 = F[:, 0]
     f2 = F[:, 1]
 
@@ -578,6 +615,10 @@ def init_lagrange_multiplier(nr_of_constraints):
         if SIMULATION_TYPE == "SPRING":
             lagrange_multipliers.append(0)
 
+def init_strain_forces():
+    for elem in current_cluster_configuration_0:
+        elem.strain_force = numpy.matrix([0., 0.]).T
+
 
 def simulation_step(dt):
     # compute_goal_pos(fixed_cluster_configuration,current_cluster_configuration)
@@ -585,7 +626,7 @@ def simulation_step(dt):
     # generate collision constraints
     nr_of_constraints = len(clusters)
     init_lagrange_multiplier(nr_of_constraints)
-
+    init_strain_forces()
     for i in range(0, solverIterations):
         begin_time = time.process_time()
 
