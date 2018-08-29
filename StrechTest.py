@@ -13,13 +13,16 @@ from scipy.spatial import Delaunay
 # TODO shape -> points, parameter // FLEX wo particle /materialien, selber scene machen, verschiebung/dehnung von einfachem würfel sei flex oder 2d
 
 USE_XPBD = True
+DEBUG_ON = False
+GRAVITY_ON = False
+
 SIMULATION_TYPE = "FEM"  # SPRING, FEM
 
 WINDOW_HEIGHT = 800
 WINDOW_WIDTH = 800
 
+
 gravity = 9.81
-GRAVITY_ON = False
 pygame.init()
 pygame.font.init()
 
@@ -27,13 +30,13 @@ window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.DOUBLEBUF
 
 pygame.display.set_caption("XPBD")
 
-FPS = 60
+FPS = 200
 clock = pygame.time.Clock()
 currentTime = 0
 lastFrameTime = 0
 
 # lamé parameters
-lame_youngs_modulus = 10 ** 2
+lame_youngs_modulus = 10 ** 1
 lame_poisson_ratio = 0.3  # apparently poisson ratio
 lame_mu = 1#lame_youngs_modulus / (2 * (1 + lame_poisson_ratio))
 lame_lambda = .5#lame_youngs_modulus * lame_poisson_ratio / ((1 + lame_poisson_ratio) * (1 - 2 * lame_poisson_ratio))  #
@@ -114,8 +117,8 @@ fixed_cluster_configuration_0 = list(map(pointFromTuple, sequence_of_tuples.toli
 
 current_cluster_configuration_0 = list(map(deformedPointFromTuple, sequence_of_tuples.tolist()))
 
-
-inv_mass_bsp_1 = 10000
+'''
+inv_mass_bsp_1 = 1000
 
 fixed_cluster_configuration_0 = [Point(-1, -.5, 0), Point(-1, .25, 0), Point(-.5, -.5, inv_mass_bsp_1), Point(-.5, .25, inv_mass_bsp_1),
                                  Point(0, -.5, inv_mass_bsp_1), Point(0, .25, inv_mass_bsp_1), Point(.5, -.5, 0), Point(.5, .25, 0)]
@@ -124,6 +127,7 @@ current_cluster_configuration_0 = [Point(-1, -.5, 0), Point(-1, .25, 0), Point(-
                                    Point(0, -.5, inv_mass_bsp_1), Point(0, .25, inv_mass_bsp_1), Point(.7, -.5, 0), Point(.7, .25, 0)]
 
 clusters = [[0, 1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6], [5, 6, 7]]  # triangles
+'''
 
 '''
 fixed_cluster_configuration_0 = [Point(-.3, 0, 1), Point(0, -.4, 0), Point(.3, 0, 1)]
@@ -135,14 +139,16 @@ clusters = [[0, 1, 2]]  # triangles
 
 '''
 if SIMULATION_TYPE == "SPRING":
-    fixed_cluster_configuration_0 = [Point(-1, 0, 0), Point(-.5, 0, 10), Point(.5, 0, 10), Point(1, 0, 0)]
-    current_cluster_configuration_0 = [Point(-.9, 0, 0), Point(-.5, 0, 10), Point(.5, 0, 10), Point(.9, 0, 0)]
+    fixed_cluster_configuration_0 = [Point(-.9, 0, 0), Point(-.5, 0, 8100), Point(.5, 0, 8100), Point(.9, 0, 0)]
+    current_cluster_configuration_0 = [Point(-1, 0, 0), Point(-.5, 0,8100), Point(.5, 0, 8100), Point(1, 0, 0)]
     clusters = [[0, 1],[1, 2],[2, 3]]
 '''
+
 if SIMULATION_TYPE == "SPRING":
-    fixed_cluster_configuration_0 = [Point(0, 0, 0), Point(0, 0, 1)]
-    current_cluster_configuration_0 = [Point(0, 0, 0), Point(0, 1, 1)]
+    fixed_cluster_configuration_0 = [Point(0, 0, 0), Point(0, 0, 4.0)]
+    current_cluster_configuration_0 = [Point(0, 0, 0), Point(0, 1, 4.0)]
     clusters = [[0, 1]]
+
 '''
 fixed_cluster_configuration_0 = [Point(-.5, -.5, 1), Point(0, .25, 1), Point(.5, -.5, 1)]
 
@@ -279,11 +285,12 @@ def draw_loop(dt):
                             math.floor(WINDOW_HEIGHT - ((curr_point.y_pos * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))),
                            5,
                            0)
-        pos1 = [math.floor((curr_point.x_pos * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2),
+        if USE_XPBD and DEBUG_ON:
+            pos1 = [math.floor((curr_point.x_pos * WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2),
                            math.floor(WINDOW_HEIGHT - ((curr_point.y_pos * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))]
-        pos2 = [math.floor((curr_point.x_pos + curr_point.strain_force.item(0))* WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2,
+            pos2 = [math.floor((curr_point.x_pos + curr_point.strain_force.item(0))* WINDOW_WIDTH / 2) + WINDOW_WIDTH / 2,
                 math.floor(WINDOW_HEIGHT - (((curr_point.y_pos + curr_point.strain_force.item(1)) * WINDOW_HEIGHT / 2) + WINDOW_HEIGHT / 2))]
-        pygame.draw.lines(window, (0, 0, 255), True, [pos1, pos2], 2)
+            pygame.draw.lines(window, (0, 0, 255), True, [pos1, pos2], 2)
         # print("x = " + str(math.floor((curr_point.x_val * WINDOW_WIDTH/2) + WINDOW_WIDTH / 2)) + " y = " + str(math.floor(WINDOW_HEIGHT - ((curr_point.y_val * WINDOW_HEIGHT/2) + WINDOW_HEIGHT / 2))))
         # pygame.draw.circle(window, (255, 255, 255), (100, 100), 50, 0)
         # label = my_font.render(str(1 / dt), False, (0, 0, 0))
@@ -442,19 +449,20 @@ def project_shape_constraints_new(k, positions, cluster, curr_cluster_index, dt)
     # sigma = lambda * trace(epsilon) + 2 * my * Matrixepsilon
 
     #programming attempt
-    sigma = lame_lambda * numpy.trace(G) * numpy.identity(2) + 2 * lame_mu * G
+    if DEBUG_ON:
+        sigma = lame_lambda * numpy.trace(G) * numpy.identity(2) + 2 * lame_mu * G
 
-    for i in range(3):
-        pos_1_index = i
-        pos_2_index = (i + 1) % 3
-        #pos_3_index = (i + 2) % 3
-        edge_i = curr_positions[pos_2_index].minus(curr_positions[pos_1_index])
-        normal_vec_i = numpy.matrix([-edge_i.y_pos, edge_i.x_pos])
-        #length_edge_i = sqrt(edge_i.y*edge_i.y + edge_i.x * edge_i.x)
-        #normalization not necessary, because we would multiply the length anyway
-        force_i = sigma * normal_vec_i.T
-        curr_positions[pos_1_index].strain_force += force_i / 16
-        curr_positions[pos_2_index].strain_force += force_i / 16
+        for i in range(3):
+            pos_1_index = i
+            pos_2_index = (i + 1) % 3
+            #pos_3_index = (i + 2) % 3
+            edge_i = curr_positions[pos_2_index].minus(curr_positions[pos_1_index])
+            normal_vec_i = numpy.matrix([-edge_i.y_pos, edge_i.x_pos])
+            #length_edge_i = sqrt(edge_i.y*edge_i.y + edge_i.x * edge_i.x)
+            #normalization not necessary, because we would multiply the length anyway
+            force_i = sigma * normal_vec_i.T
+            curr_positions[pos_1_index].strain_force += force_i / 16
+            curr_positions[pos_2_index].strain_force += force_i / 16
 
 
     f1 = F[:, 0]
@@ -597,7 +605,7 @@ def project_constraints(k, positions, cluster_set, dt):
         # project_velocity_constraints(k, positions, cluster, dt)
 
 
-solverIterations = 3
+solverIterations = 100
 # in [0,1]
 stiffness = .0000000000000001
 # correct stiffness, so that it is linear to k (stiffness)
@@ -684,6 +692,7 @@ while running:
             frame_rate = 30 / (frame_rate_t1 - frame_rate_t0)
         pygame.display.set_caption("Stretch Test | FPS: " + str(frame_rate))
         frame_rate_t0 = frame_rate_t1
+
 
     # pygame.draw.circle(window, (255, 255, 255), (xpos, 100), 50, 0)
     print(frame_count)
