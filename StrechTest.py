@@ -15,6 +15,7 @@ from scipy.spatial import Delaunay
 USE_XPBD = True
 DEBUG_ON = False
 GRAVITY_ON = False
+EXPORT_TO_MATLAB = True
 
 SIMULATION_TYPE = "FEM"  # SPRING, FEM
 
@@ -605,7 +606,7 @@ def project_constraints(k, positions, cluster_set, dt):
         # project_velocity_constraints(k, positions, cluster, dt)
 
 
-solverIterations = 100
+solverIterations = 3
 # in [0,1]
 stiffness = .0000000000000001
 # correct stiffness, so that it is linear to k (stiffness)
@@ -651,6 +652,12 @@ def simulation_step(dt):
 
     # print(get_pos_vec(current_cluster_configuration))
 
+def export_positions_to_file(name, frame_count):
+    export_mat = numpy.matrix([0, 0])
+    for curr_point in current_cluster_configuration_0:
+        export_mat = numpy.r_[export_mat, curr_point.to_vec().T]
+    export_mat = export_mat[1:export_mat.__len__(), :]
+    scipy.io.savemat("saved_matrices/"+name+"_"+frame_count+".mat", {'mat':export_mat})
 
 frame_count = 0
 frame_rate = 0
@@ -662,6 +669,8 @@ running = True
 # init_scene()
 if SIMULATION_TYPE == "FEM":
     precalculate_Qis()
+
+
 
 while running:
     # sleepTime = 1. / FPS - (currentTime - lastFrameTime)
@@ -693,7 +702,8 @@ while running:
         pygame.display.set_caption("Stretch Test | FPS: " + str(frame_rate))
         frame_rate_t0 = frame_rate_t1
 
-
+    if EXPORT_TO_MATLAB:
+        export_positions_to_file('mesh_01', str(frame_count))
     # pygame.draw.circle(window, (255, 255, 255), (xpos, 100), 50, 0)
     print(frame_count)
     pygame.display.flip()
