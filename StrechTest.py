@@ -14,7 +14,7 @@ from scipy.spatial import Delaunay
 
 USE_XPBD = True
 DEBUG_ON = False
-GRAVITY_ON = False
+GRAVITY_ON = True
 EXPORT_TO_MATLAB = True
 
 SIMULATION_TYPE = "FEM"  # SPRING, FEM
@@ -99,6 +99,7 @@ clusters = triplets.tolist()
 
 
 #810
+'''
 def pointFromTuple(tuple):
     if (tuple[0] == -.3 or tuple[0] == .7):
         return Point(tuple[0], tuple[1], 0)
@@ -112,6 +113,18 @@ def deformedPointFromTuple(tuple):
         return Point(tuple[0] + 0.3, tuple[1], 0)
 
     return Point(tuple[0], tuple[1], 810)
+'''
+
+def pointFromTuple(tuple):
+    if (tuple[1] == 1):
+        return Point(tuple[0], tuple[1], 0)
+    return Point(tuple[0], tuple[1], 1)
+
+
+def deformedPointFromTuple(tuple):
+    if (tuple[1] == 1):
+        return Point(tuple[0], tuple[1], 0)
+    return Point(tuple[0], tuple[1], 1)
 
 
 fixed_cluster_configuration_0 = list(map(pointFromTuple, sequence_of_tuples.tolist()))
@@ -606,7 +619,7 @@ def project_constraints(k, positions, cluster_set, dt):
         # project_velocity_constraints(k, positions, cluster, dt)
 
 
-solverIterations = 3
+solverIterations = 5
 # in [0,1]
 stiffness = .0000000000000001
 # correct stiffness, so that it is linear to k (stiffness)
